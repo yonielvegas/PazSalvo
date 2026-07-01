@@ -1,0 +1,9 @@
+*
+!.gitignore
+!templates/
+templates/*
+!templates/clientes.xlsx
+!templates/plantilla_paz_y_salvo.xlsx
+!templates/assets/
+!templates/assets/AAUD.jpg
+!templates/assets/Firma.jpeg
