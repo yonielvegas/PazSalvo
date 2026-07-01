@@ -21,26 +21,29 @@ class DatabaseSeeder extends Seeder
     {
         $permissions = [
             'consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo',
-            'anular paz y salvo', 'administrar usuarios', 'administrar agencias',
+            'anular paz y salvo', 'administrar usuarios', 'administrar agencias', 'administrar roles',
         ];
         $models = collect($permissions)->mapWithKeys(fn ($name) => [$name => Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web'])]);
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web'])->syncPermissions($models->values());
-        Role::firstOrCreate(['name' => 'supervisor', 'guard_name' => 'web'])->syncPermissions($models->take(5)->values());
-        Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web'])->syncPermissions($models->take(4)->values());
+        Role::firstOrCreate(['name' => 'supervisor', 'guard_name' => 'web'])->syncPermissions($models->only(['consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo', 'anular paz y salvo'])->values());
+        Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web'])->syncPermissions($models->only(['consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo'])->values());
         Role::firstOrCreate(['name' => 'consulta', 'guard_name' => 'web'])->syncPermissions($models->only(['consultar paz y salvo', 'ver historial', 'ver detalle paz y salvo'])->values());
 
         $testAgencies = [
-            ['name' => 'Via Brasil', 'code' => 'VIA-BRASIL', 'users' => ['viabrasil1@aaud.test', 'viabrasil2@aaud.test']],
-            ['name' => 'PH Multiplaza', 'code' => 'PH-MULTIPLAZA', 'users' => ['multiplaza1@aaud.test', 'multiplaza2@aaud.test']],
-            ['name' => 'Villa Lucre', 'code' => 'VILLA-LUCRE', 'users' => ['villalucre1@aaud.test', 'villalucre2@aaud.test']],
-            ['name' => 'La Gran Estacion', 'code' => 'GRAN-ESTACION', 'users' => ['granestacion1@aaud.test', 'granestacion2@aaud.test']],
+            ['name' => 'Via Brasil', 'code' => 'VIA-BRASIL', 'users' => ['viabrasil1@aaud.gob.pa', 'viabrasil2@aaud.gob.pa']],
+            ['name' => 'PH Multiplaza', 'code' => 'PH-MULTIPLAZA', 'users' => ['multiplaza1@aaud.gob.pa', 'multiplaza2@aaud.gob.pa']],
+            ['name' => 'Villa Lucre', 'code' => 'VILLA-LUCRE', 'users' => ['villalucre1@aaud.gob.pa', 'villalucre2@aaud.gob.pa']],
+            ['name' => 'La Gran Estacion', 'code' => 'GRAN-ESTACION', 'users' => ['granestacion1@aaud.gob.pa', 'granestacion2@aaud.gob.pa']],
         ];
 
+        $adminAgency = null;
         foreach ($testAgencies as $agencyData) {
             $agency = Agency::firstOrCreate(
                 ['name' => $agencyData['name']],
                 ['code' => $agencyData['code'], 'is_active' => true]
             );
+            $agency->update(['code' => $agencyData['code'], 'is_active' => true]);
+            $adminAgency ??= $agency;
 
             foreach ($agencyData['users'] as $email) {
                 $user = User::firstOrCreate(
@@ -58,6 +61,21 @@ class DatabaseSeeder extends Seeder
 
                 $user->syncRoles(['operador']);
             }
+
         }
+
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@aaud.gob.pa'],
+            [
+                'agency_id' => $adminAgency?->id,
+                'name' => 'Admin AAUD',
+                'password' => Hash::make('aaud.123'),
+                'is_active' => true,
+            ]
+        );
+        if ($adminAgency && $admin->agency_id !== $adminAgency->id) {
+            $admin->forceFill(['agency_id' => $adminAgency->id, 'is_active' => true])->save();
+        }
+        $admin->syncRoles(['admin']);
     }
 }

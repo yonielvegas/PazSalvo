@@ -15,14 +15,15 @@ class PublicCertificateVerificationController extends Controller
     {
         $document = null;
         if (Str::isUuid($token)) {
-            $document = PazSalvo::with('cancelledBy:id,name')->where('verification_token', $token)
+            $document = PazSalvo::with(['client', 'agency:id,name', 'generatedBy:id,name', 'userSignature.user:id,name', 'cancelledBy:id,name'])->where('verification_token', $token)
                 ->whereIn('status', [PazSalvo::GENERATED, PazSalvo::CANCELLED])->first();
         }
 
         return Inertia::render('public/verify', ['certificate' => $document ? [
-            'status' => $document->publicStatus(), 'folio' => $document->folio, 'client_number' => $document->client_number,
-            'holder_name' => $document->holder_name, 'full_address' => $document->full_address,
-            'agency' => $document->agency_name_snapshot, 'generated_by' => $document->generated_by_name_snapshot,
+            'status' => $document->publicStatus(), 'folio' => $document->folio, 'client_number' => $document->client->client_number,
+            'holder_name' => $document->client->holder_name, 'full_address' => $document->client->full_address,
+            'agency' => $document->agency->name, 'generated_by' => $document->generatedBy->name,
+            'authorized_by' => $document->userSignature?->user?->name,
             'issued_at' => $document->issued_at, 'expires_at' => $document->expires_at,
             'cancelled_at' => $document->cancelled_at, 'cancel_reason' => $document->cancel_reason,
             'pdf_url' => $document->status === PazSalvo::GENERATED ? route('public.certificates.pdf', $token) : null,

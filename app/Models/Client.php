@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,14 +13,16 @@ class Client extends Model
 
     protected $guarded = [];
 
-    protected function casts(): array
+    protected function fullAddress(): Attribute
     {
-        return ['is_active' => 'boolean'];
-    }
+        return Attribute::get(function () {
+            $parts = collect([$this->district, $this->corregimiento, $this->city, $this->address])
+                ->map(fn ($value) => trim((string) $value))
+                ->filter()
+                ->values();
 
-    public function debtQueries(): HasMany
-    {
-        return $this->hasMany(DebtQuery::class);
+            return $parts->isEmpty() ? 'Sin dirección' : $parts->implode(' - ');
+        });
     }
 
     public function pazSalvos(): HasMany

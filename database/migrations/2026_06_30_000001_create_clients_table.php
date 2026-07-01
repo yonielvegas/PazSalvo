@@ -17,7 +17,6 @@ return new class extends Migration
             $table->text('address')->nullable();
             $table->string('city')->nullable();
             $table->string('rate')->nullable();
-            $table->boolean('is_active')->default(true)->index();
             $table->timestamps();
         });
     }

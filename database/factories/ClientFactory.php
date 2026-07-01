@@ -11,6 +11,11 @@ class ClientFactory extends Factory
 
     public function definition(): array
     {
-        return ['client_number' => fake()->unique()->numerify('#####'), 'holder_name' => fake()->name(), 'is_active' => true];
+        return [
+            'client_number' => fake()->unique()->numerify('#####'),
+            'holder_name' => fake()->name(),
+            'city' => fake()->city(),
+            'address' => fake()->streetAddress(),
+        ];
     }
 }

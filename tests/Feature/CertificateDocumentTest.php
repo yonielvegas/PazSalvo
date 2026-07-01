@@ -22,8 +22,9 @@ class CertificateDocumentTest extends TestCase
             $paths[] = $xlsx = app(PazSalvoExcelService::class)->generate([
                 'folio' => 'CC-000001-2026', 'client_number' => '34787', 'holder_name' => 'CLIENTE DE PRUEBA',
                 'full_address' => 'PANAMÁ - CALLE DE PRUEBA', 'issued_at' => $issued, 'expires_at' => $issued->copy()->addDays(30),
-                'generated_by_name_snapshot' => 'Usuario de Prueba', 'agency_name_snapshot' => 'Agencia Central',
-                'authorized_by_name' => 'Vielsa Vergara', 'legal_text' => config('paz-salvo.legal_text'),
+                'generated_by_name' => 'Usuario de Prueba', 'agency_name' => 'Via Brasil',
+                'authorized_by_name' => 'Autorizado Via Brasil', 'signature_path' => config('paz-salvo.signature'),
+                'legal_text' => config('paz-salvo.legal_text'),
             ], $qr);
             $paths[] = $pdf = app(PdfConversionService::class)->convertXlsxToPdf($xlsx);
             $disk = Storage::disk(config('paz-salvo.disk'));

@@ -18,7 +18,7 @@ class PazSalvoExcelService
     public function generate(array $data, string $qrPath): string
     {
         $disk = Storage::disk(config('paz-salvo.disk'));
-        foreach ([config('paz-salvo.template_excel'), config('paz-salvo.logo'), config('paz-salvo.signature'), $qrPath] as $required) {
+        foreach ([config('paz-salvo.template_excel'), config('paz-salvo.logo'), $data['signature_path'], $qrPath] as $required) {
             if (! $disk->exists($required)) {
                 throw new ExcelLookupException("Falta un recurso requerido para el certificado: {$required}");
             }
@@ -66,10 +66,10 @@ class PazSalvoExcelService
                 $sheet->getStyle("A{$row}:H{$row}")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('CBD5E1');
             }
 
-            $sheet->mergeCells('A19:D19')->setCellValue('A19', 'Elaborado por: '.$data['generated_by_name_snapshot']);
-            $sheet->mergeCells('A20:D20')->setCellValue('A20', 'Agencia: '.$data['agency_name_snapshot']);
+            $sheet->mergeCells('A19:D19')->setCellValue('A19', 'Elaborado por: '.$data['generated_by_name']);
+            $sheet->mergeCells('A20:D20')->setCellValue('A20', 'Agencia: '.$data['agency_name']);
             $sheet->mergeCells('A23:D23')->setCellValue('A23', 'Autorizado por: '.$data['authorized_by_name']);
-            $this->image($disk->path(config('paz-salvo.signature')), $sheet, 'A24', 90);
+            $this->image($disk->path($data['signature_path']), $sheet, 'A24', 90);
             $sheet->mergeCells('F19:H28')->setCellValue('F19', 'SELLO');
             $sheet->getStyle('F19:H28')->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_MEDIUM);
             $sheet->getStyle('F19:H28')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);

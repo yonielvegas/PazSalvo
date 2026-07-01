@@ -25,7 +25,6 @@ class ConsultPazSalvoTest extends TestCase
         $this->actingAs($user)->post(route('paz-salvo.consult'), ['client_number' => '34787'])
             ->assertRedirect()->assertSessionHas('paz_salvo_query')->assertSessionHas('result.status', 'debt_free');
         $this->assertDatabaseCount('paz_salvos', 0);
-        $this->assertDatabaseCount('debt_queries', 0);
         $this->assertDatabaseCount('clients', 0);
     }
 

@@ -20,17 +20,26 @@ class PazSalvoHistoryController extends Controller
             'generated_by' => ['nullable', 'integer'], 'status' => ['nullable', Rule::in(['generated', 'cancelled', 'error'])],
             'from' => ['nullable', 'date'], 'to' => ['nullable', 'date'],
         ]);
-        $documents = PazSalvo::query()->with(['generatedBy:id,name', 'agency:id,name'])
-            ->when($filters['search'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('folio', 'ilike', "%{$v}%")->orWhere('client_number', 'ilike', "%{$v}%")->orWhere('holder_name', 'ilike', "%{$v}%")))
+        $documents = PazSalvo::query()->with(['client:id,client_number,holder_name,district,corregimiento,city,address', 'generatedBy:id,name', 'agency:id,name'])
+            ->when($filters['search'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('folio', 'ilike', "%{$v}%")->orWhereHas('client', fn ($q) => $q->where('client_number', 'ilike', "%{$v}%")->orWhere('holder_name', 'ilike', "%{$v}%"))))
             ->when($filters['agency_id'] ?? null, fn ($q, $v) => $q->where('agency_id', $v))
             ->when($filters['generated_by'] ?? null, fn ($q, $v) => $q->where('generated_by', $v))
             ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
             ->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate('issued_at', '>=', $v))
             ->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate('issued_at', '<=', $v))
             ->latest('issued_at')->paginate(15)->withQueryString()->through(function (PazSalvo $document) {
-                $document->setAttribute('effective_status', $document->publicStatus());
-
-                return $document;
+                return [
+                    'id' => $document->id,
+                    'folio' => $document->folio,
+                    'client_number' => $document->client->client_number,
+                    'holder_name' => $document->client->holder_name,
+                    'agency_name' => $document->agency->name,
+                    'generated_by_name' => $document->generatedBy->name,
+                    'issued_at' => $document->issued_at,
+                    'expires_at' => $document->expires_at,
+                    'status' => $document->status,
+                    'effective_status' => $document->publicStatus(),
+                ];
             });
 
         return Inertia::render('paz-salvo/history', [
@@ -41,9 +50,28 @@ class PazSalvoHistoryController extends Controller
 
     public function show(PazSalvo $pazSalvo): Response
     {
-        $pazSalvo->load(['generatedBy:id,name', 'agency:id,name', 'cancelledBy:id,name'])->setAttribute('effective_status', $pazSalvo->publicStatus());
+        $pazSalvo->load(['client', 'generatedBy:id,name', 'agency:id,name', 'userSignature.user:id,name', 'cancelledBy:id,name']);
+        $document = [
+            'id' => $pazSalvo->id,
+            'folio' => $pazSalvo->folio,
+            'verification_token' => $pazSalvo->verification_token,
+            'status' => $pazSalvo->status,
+            'effective_status' => $pazSalvo->publicStatus(),
+            'client_number' => $pazSalvo->client->client_number,
+            'holder_name' => $pazSalvo->client->holder_name,
+            'full_address' => $pazSalvo->client->full_address,
+            'total_balance' => $pazSalvo->total_balance,
+            'issued_at' => $pazSalvo->issued_at,
+            'expires_at' => $pazSalvo->expires_at,
+            'agency_name' => $pazSalvo->agency->name,
+            'generated_by_name' => $pazSalvo->generatedBy->name,
+            'authorized_by_name' => $pazSalvo->userSignature?->user?->name,
+            'cancelled_at' => $pazSalvo->cancelled_at,
+            'cancel_reason' => $pazSalvo->cancel_reason,
+            'cancelled_by' => $pazSalvo->cancelledBy,
+        ];
 
-        return Inertia::render('paz-salvo/show', ['document' => $pazSalvo]);
+        return Inertia::render('paz-salvo/show', ['document' => $document]);
     }
 
     public function cancel(Request $request, PazSalvo $pazSalvo): RedirectResponse

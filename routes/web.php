@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\PazSalvoController;
 use App\Http\Controllers\PazSalvoHistoryController;
 use App\Http\Controllers\PublicCertificateVerificationController;
+use App\Http\Controllers\RolePermissionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -20,4 +22,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/paz-salvos/{pazSalvo}/download', [PazSalvoController::class, 'downloadPdf'])->middleware('permission:ver detalle paz y salvo')->name('paz-salvo.download');
     Route::patch('/paz-salvos/{pazSalvo}/cancelar', [PazSalvoHistoryController::class, 'cancel'])->middleware('permission:anular paz y salvo')->name('paz-salvos.cancel');
     Route::get('/perfil/password', fn () => Inertia::render('profile/password'))->name('profile.password');
+
+    Route::resource('/admin/users', AdminUserController::class)->except(['create', 'edit', 'show'])->middleware('permission:administrar usuarios');
+    Route::patch('/admin/users/{user}/toggle', [AdminUserController::class, 'toggle'])->middleware('permission:administrar usuarios')->name('admin.users.toggle');
+    Route::get('/admin/users/{user}/signature', [AdminUserController::class, 'signature'])->middleware('permission:administrar usuarios')->name('admin.users.signature');
+
+    Route::get('/admin/roles', [RolePermissionController::class, 'index'])->middleware('permission:administrar roles')->name('admin.roles.index');
+    Route::put('/admin/roles/{role}/permissions', [RolePermissionController::class, 'update'])->middleware('permission:administrar roles')->name('admin.roles.permissions.update');
 });

@@ -24,11 +24,14 @@ class PazSalvo extends Model
     protected function casts(): array
     {
         return [
-            'total_balance' => 'decimal:2', 'expired_balance' => 'decimal:2',
-            'non_expired_balance' => 'decimal:2', 'issued_at' => 'datetime',
+            'total_balance' => 'decimal:2', 'issued_at' => 'datetime',
             'expires_at' => 'datetime', 'cancelled_at' => 'datetime',
-            'raw_widergy_response' => 'array', 'certificate_snapshot' => 'array',
         ];
+    }
+
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
     }
 
     public function generatedBy(): BelongsTo
@@ -46,6 +49,11 @@ class PazSalvo extends Model
         return $this->belongsTo(User::class, 'cancelled_by');
     }
 
+    public function userSignature(): BelongsTo
+    {
+        return $this->belongsTo(UserSignature::class);
+    }
+
     public function publicStatus(): string
     {
         if ($this->status === self::CANCELLED) {
@@ -61,5 +69,10 @@ class PazSalvo extends Model
     protected function effectiveStatus(): Attribute
     {
         return Attribute::get(fn () => $this->publicStatus());
+    }
+
+    protected function fullAddress(): Attribute
+    {
+        return Attribute::get(fn () => $this->client?->full_address ?? 'Sin dirección');
     }
 }

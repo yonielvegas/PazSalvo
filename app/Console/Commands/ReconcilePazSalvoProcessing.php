@@ -17,8 +17,8 @@ class ReconcilePazSalvoProcessing extends Command
         $count = 0;
         PazSalvo::where('status', PazSalvo::PROCESSING)->where('created_at', '<', now()->subMinutes((int) $this->option('minutes')))
             ->eachById(function (PazSalvo $document) use (&$count) {
-                Storage::disk(config('paz-salvo.disk'))->delete(array_filter([$document->qr_path, $document->xlsx_path, $document->pdf_path]));
-                $document->update(['status' => PazSalvo::ERROR, 'qr_path' => null, 'xlsx_path' => null, 'pdf_path' => null, 'generation_error' => 'Emisión interrumpida antes de finalizar.']);
+                Storage::disk(config('paz-salvo.disk'))->delete(array_filter([$document->pdf_path]));
+                $document->update(['status' => PazSalvo::ERROR, 'pdf_path' => null, 'generation_error' => 'Emisión interrumpida antes de finalizar.']);
                 $count++;
             });
         $this->info("{$count} emisiones reconciliadas.");
