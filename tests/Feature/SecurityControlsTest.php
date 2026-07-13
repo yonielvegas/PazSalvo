@@ -70,7 +70,7 @@ class SecurityControlsTest extends TestCase
     public function test_failed_login_uses_spanish_message_with_remaining_attempts(): void
     {
         $user = User::factory()->create(['email' => 'login-message@example.com']);
-        $this->assertSame(0, $user->login_attempts);
+        $this->assertSame(0, $user->refresh()->login_attempts);
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.40'])
             ->post(route('login.store'), [

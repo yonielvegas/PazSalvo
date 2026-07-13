@@ -15,7 +15,7 @@ export default function PublicHome() {
                     <p>Verifique la autenticidad y vigencia de un Paz y Salvo emitido por la Autoridad de Aseo Urbano y Domiciliario.</p>
                     <div className="public-actions">
                         <Link className="public-primary-action" href="/validar-paz-salvo"><ShieldCheck /> Validar Paz y Salvo</Link>
-                        <Link className="public-secondary-action" href="/login"><LogIn size={18} /> Acceso institucional</Link>
+                        <Link className="public-secondary-action" href="/acceso-institucional"><LogIn size={18} /> Acceso institucional</Link>
                     </div>
                 </section>
             </main>

@@ -18,7 +18,7 @@ class ConsultPazSalvoTest extends TestCase
     private function authedUser(): User
     {
         $user = User::factory()->create();
-        $permission = Permission::create(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
+        $permission = Permission::firstOrCreate(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
         $user->givePermissionTo($permission);
 
         return $user;

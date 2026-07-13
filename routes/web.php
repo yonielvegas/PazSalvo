@@ -9,6 +9,11 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', [PublicCertificateVerificationController::class, 'home'])->name('public.home');
+Route::get('/acceso-institucional', function () {
+    return auth()->check()
+        ? redirect()->route('paz-salvo.index')
+        : redirect()->route('login');
+})->name('institutional.access');
 Route::get('/validar-paz-salvo', [PublicCertificateVerificationController::class, 'manualForm'])->middleware('throttle:60,1')->name('public.paz-salvo.validate');
 Route::post('/validar-paz-salvo', [PublicCertificateVerificationController::class, 'manualVerify'])->middleware('throttle:public-paz-salvo-validation')->name('public.paz-salvo.validate.submit');
 Route::get('/verificar/{token}', [PublicCertificateVerificationController::class, 'show'])->middleware('throttle:public-certificate-qr')->name('public.certificates.verify');

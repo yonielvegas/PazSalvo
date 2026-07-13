@@ -59,10 +59,11 @@ class PublicPazSalvoValidationTest extends TestCase
     {
         PazSalvo::factory()->create(['folio' => 'CC-000001-2026', 'issued_at' => now()]);
 
-        $this->post(route('public.paz-salvo.validate.submit'), [
-            'folio' => 'CC-000001-2026',
-            'fecha_emision' => now()->subDay()->toDateString(),
-        ])->assertRedirect(route('public.paz-salvo.validate'))
+        $this->from(route('public.paz-salvo.validate'))
+            ->post(route('public.paz-salvo.validate.submit'), [
+                'folio' => 'CC-000001-2026',
+                'fecha_emision' => now()->subDay()->toDateString(),
+            ])->assertRedirect(route('public.paz-salvo.validate'))
             ->assertSessionHas('validation_not_found', 'No se encontró un Paz y Salvo con los datos ingresados. Revise el folio o la fecha de emisión.')
             ->assertSessionHas('validation_not_found_id');
 
@@ -74,27 +75,30 @@ class PublicPazSalvoValidationTest extends TestCase
 
     public function test_manual_validation_not_found_redirect_does_not_throw_type_error(): void
     {
-        $this->post(route('public.paz-salvo.validate.submit'), [
-            'folio' => 'CC-999999-2026',
-            'fecha_emision' => now()->toDateString(),
-        ])->assertRedirect(route('public.paz-salvo.validate'))
+        $this->from(route('public.paz-salvo.validate'))
+            ->post(route('public.paz-salvo.validate.submit'), [
+                'folio' => 'CC-999999-2026',
+                    'fecha_emision' => now()->toDateString(),
+                ])->assertRedirect(route('public.paz-salvo.validate'))
             ->assertSessionHas('validation_not_found')
             ->assertSessionHas('validation_not_found_id');
     }
 
     public function test_repeated_not_found_manual_validations_generate_distinct_flash_ids(): void
     {
-        $first = $this->post(route('public.paz-salvo.validate.submit'), [
-            'folio' => 'CC-999998-2026',
-            'fecha_emision' => now()->toDateString(),
-        ]);
+        $first = $this->from(route('public.paz-salvo.validate'))
+            ->post(route('public.paz-salvo.validate.submit'), [
+                'folio' => 'CC-999998-2026',
+                'fecha_emision' => now()->toDateString(),
+            ]);
 
         $firstId = $first->getSession()->get('validation_not_found_id');
 
-        $second = $this->post(route('public.paz-salvo.validate.submit'), [
-            'folio' => 'CC-999998-2026',
-            'fecha_emision' => now()->toDateString(),
-        ]);
+        $second = $this->from(route('public.paz-salvo.validate'))
+            ->post(route('public.paz-salvo.validate.submit'), [
+                'folio' => 'CC-999998-2026',
+                'fecha_emision' => now()->toDateString(),
+            ]);
 
         $first->assertRedirect(route('public.paz-salvo.validate'));
         $second->assertRedirect(route('public.paz-salvo.validate'));
@@ -119,10 +123,12 @@ class PublicPazSalvoValidationTest extends TestCase
     public function test_public_manual_validation_is_rate_limited(): void
     {
         for ($i = 0; $i < 10; $i++) {
-            $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])->post(route('public.paz-salvo.validate.submit'), [
-                'folio' => 'CC-999999-2026',
-                'fecha_emision' => now()->toDateString(),
-            ])->assertRedirect(route('public.paz-salvo.validate'));
+            $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+                ->from(route('public.paz-salvo.validate'))
+                ->post(route('public.paz-salvo.validate.submit'), [
+                    'folio' => 'CC-999999-2026',
+                    'fecha_emision' => now()->toDateString(),
+                ])->assertRedirect(route('public.paz-salvo.validate'));
         }
 
         $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])->post(route('public.paz-salvo.validate.submit'), [
@@ -137,8 +143,16 @@ class PublicPazSalvoValidationTest extends TestCase
 
         $this->get(route('public.certificates.verify', $document->verification_token))
             ->assertOk()
-            ->assertSee('Validar otro Paz y Salvo')
-            ->assertSee('/validar-paz-salvo');
+            ->assertInertia(fn ($page) => $page
+                ->component('public/verify')
+                ->where('certificate.folio', $document->folio)
+                ->where('certificate.status', 'valid')
+            );
+
+        $source = file_get_contents(resource_path('js/pages/public/verify.tsx'));
+
+        $this->assertStringContainsString('Validar otro Paz y Salvo', $source);
+        $this->assertStringContainsString('href="/validar-paz-salvo"', $source);
     }
 
     public function test_invalid_qr_token_still_shows_public_not_found_result(): void
