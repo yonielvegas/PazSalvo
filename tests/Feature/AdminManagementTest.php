@@ -16,13 +16,16 @@ class AdminManagementTest extends TestCase
 
     public function test_paz_salvos_schema_contains_only_normalized_certificate_fields(): void
     {
-        foreach (['xlsx_path', 'qr_path', 'raw_widergy_response', 'certificate_snapshot', 'legal_text', 'generated_by_name_snapshot', 'agency_name_snapshot', 'authorized_by_name', 'full_address', 'expired_balance', 'non_expired_balance'] as $column) {
+        foreach (['xlsx_path', 'qr_path', 'raw_widergy_response', 'certificate_snapshot', 'legal_text', 'generated_by_name_snapshot', 'agency_name_snapshot', 'authorized_by_name', 'full_address', 'expired_balance', 'non_expired_balance', 'user_signature_id'] as $column) {
             $this->assertFalse(Schema::hasColumn('paz_salvos', $column), "Unexpected column: {$column}");
         }
 
-        foreach (['client_id', 'user_signature_id', 'total_balance', 'pdf_path'] as $column) {
+        foreach (['client_id', 'general_admin_signature_id', 'total_balance', 'pdf_path'] as $column) {
             $this->assertTrue(Schema::hasColumn('paz_salvos', $column), "Missing column: {$column}");
         }
+
+        $this->assertFalse(Schema::hasTable('login_lockouts'));
+        $this->assertFalse(Schema::hasTable('user_signatures'));
     }
 
     public function test_admin_pages_require_corresponding_permission(): void
@@ -68,5 +71,43 @@ class AdminManagementTest extends TestCase
 
         $this->actingAs($actor)->put("/admin/roles/{$operator->id}/permissions", ['permissions' => [$consult->name]])->assertRedirect();
         $this->assertTrue($operator->fresh()->hasPermissionTo($consult));
+    }
+
+    public function test_users_index_includes_login_and_session_state_fields(): void
+    {
+        $agency = Agency::factory()->create();
+        $actor = User::factory()->create(['agency_id' => $agency->id, 'name' => 'A Administrador']);
+        $target = User::factory()->create([
+            'agency_id' => $agency->id,
+            'name' => 'B Usuario Bloqueado',
+            'login_attempts' => 2,
+            'is_login_blocked' => true,
+        ]);
+        $permission = Permission::create(['name' => 'administrar usuarios', 'guard_name' => 'web']);
+        $actor->givePermissionTo($permission);
+
+        \Illuminate\Support\Facades\DB::table('sessions')->insert([
+            'id' => 'target-session',
+            'user_id' => $target->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'Feature Test',
+            'payload' => 'payload',
+            'last_activity' => now()->timestamp,
+        ]);
+
+        $this->actingAs($actor)
+            ->get('/admin/users')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('admin/users/index')
+                ->has('users.1', fn ($user) => $user
+                    ->where('id', $target->id)
+                    ->where('login_attempts', 2)
+                    ->where('is_login_blocked', true)
+                    ->where('has_active_session', true)
+                    ->where('active_session_count', 1)
+                    ->etc()
+                )
+            );
     }
 }

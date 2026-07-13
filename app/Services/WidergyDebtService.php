@@ -50,15 +50,41 @@ class WidergyDebtService
 
     private function requestJob(string $clientNumber): array
     {
-        $response = $this->client()->get(config('widergy.complete_debts_url'), ['client_number' => $clientNumber]);
+        try {
+            $response = $this->client()->get(config('widergy.complete_debts_url'), ['client_number' => $clientNumber]);
+        } catch (\Throwable $e) {
+            Log::warning('Widergy: complete_debts request failed', [
+                'client_number' => $clientNumber,
+                'error' => $e->getMessage(),
+            ]);
+            throw new WidergyException(
+                'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
+                ['stage' => 'request_job', 'exception' => $e->getMessage()],
+            );
+        }
+
         if (! $response->successful()) {
-            throw new WidergyException('No se pudo iniciar la consulta del cliente.', ['stage' => 'request_job', 'status' => $response->status(), 'body' => $response->json()]);
+            Log::warning('Widergy: complete_debts returned error status', [
+                'client_number' => $clientNumber,
+                'status' => $response->status(),
+            ]);
+            throw new WidergyException(
+                'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
+                ['stage' => 'request_job', 'status' => $response->status(), 'body' => $response->json()],
+            );
         }
 
         $payload = $response->json() ?? [];
         $jobId = $payload['job_id'] ?? $payload['response'] ?? null;
         if (! is_string($jobId) || $jobId === '') {
-            throw new WidergyException('Widergy no devolvió un identificador de consulta.', ['stage' => 'request_job', 'body' => $payload]);
+            Log::warning('Widergy: complete_debts response missing job_id', [
+                'client_number' => $clientNumber,
+                'body' => $payload,
+            ]);
+            throw new WidergyException(
+                'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
+                ['stage' => 'request_job', 'body' => $payload],
+            );
         }
 
         return ['job_id' => $jobId, 'url' => is_string($payload['url'] ?? null) ? $payload['url'] : null, 'raw' => $payload];
@@ -68,9 +94,30 @@ class WidergyDebtService
     {
         $endpoint = config('widergy.job_base_url');
         for ($attempt = 1; $attempt <= config('widergy.poll_attempts'); $attempt++) {
-            $response = $this->client()->get($endpoint, ['id' => $jobId]);
+            try {
+                $response = $this->client()->get($endpoint, ['id' => $jobId]);
+            } catch (\Throwable $e) {
+                Log::warning('Widergy: fetch_job request failed', [
+                    'job_id' => $jobId,
+                    'attempt' => $attempt,
+                    'error' => $e->getMessage(),
+                ]);
+                throw new WidergyException(
+                    'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
+                    ['stage' => 'fetch_job', 'attempt' => $attempt, 'exception' => $e->getMessage()],
+                );
+            }
+
             if (! $response->successful()) {
-                throw new WidergyException('No se pudo obtener el resultado de la consulta.', ['stage' => 'fetch_job', 'status' => $response->status(), 'job_id' => $jobId]);
+                Log::warning('Widergy: fetch_job returned error status', [
+                    'job_id' => $jobId,
+                    'attempt' => $attempt,
+                    'status' => $response->status(),
+                ]);
+                throw new WidergyException(
+                    'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
+                    ['stage' => 'fetch_job', 'status' => $response->status(), 'job_id' => $jobId],
+                );
             }
 
             $payload = $response->json() ?? [];
@@ -81,7 +128,14 @@ class WidergyDebtService
 
             $status = strtolower((string) ($payload['status'] ?? $payload['state'] ?? ''));
             if (in_array($status, ['failed', 'error', 'cancelled'], true)) {
-                throw new WidergyException('La consulta externa terminó con error.', ['stage' => 'fetch_job', 'job_id' => $jobId, 'body' => $payload]);
+                Log::warning('Widergy: job ended with error status', [
+                    'job_id' => $jobId,
+                    'status' => $status,
+                ]);
+                throw new WidergyException(
+                    'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
+                    ['stage' => 'fetch_job', 'job_id' => $jobId, 'body' => $payload],
+                );
             }
 
             if ($attempt < config('widergy.poll_attempts')) {
@@ -89,7 +143,11 @@ class WidergyDebtService
             }
         }
 
-        throw new WidergyException('La consulta tardó más de lo esperado.', ['stage' => 'timeout', 'job_id' => $jobId, 'url' => $url]);
+        Log::warning('Widergy: poll attempts exhausted', ['job_id' => $jobId, 'attempts' => config('widergy.poll_attempts')]);
+        throw new WidergyException(
+            'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
+            ['stage' => 'timeout', 'job_id' => $jobId, 'url' => $url],
+        );
     }
 
     private function extractResult(array $payload): array
@@ -107,6 +165,7 @@ class WidergyDebtService
     {
         $account = is_array($payload['account'] ?? null) ? $payload['account'] : [];
         $balances = is_array($payload['balances'] ?? null) ? $payload['balances'] : [];
+        $debts = is_array($payload['debts'] ?? null) ? array_values($payload['debts']) : [];
 
         return [
             'account' => [
@@ -120,10 +179,38 @@ class WidergyDebtService
                 'total_balance' => (float) ($balances['total_balance'] ?? 0),
                 'expired_balance' => (float) ($balances['expired_balance'] ?? 0),
                 'non_expired_balance' => (float) ($balances['non_expired_balance'] ?? 0),
+                ...$this->calculateServiceBalances($debts),
             ],
-            'debts' => is_array($payload['debts'] ?? null) ? array_values($payload['debts']) : [],
+            'debts' => $debts,
             'next_expiration_on' => $payload['next_expiration_on'] ?? null,
             'raw' => $payload,
+        ];
+    }
+
+    private function calculateServiceBalances(array $debts): array
+    {
+        $aseo = 0.0;
+        $energy = 0.0;
+
+        foreach ($debts as $debt) {
+            $type = strtolower((string) ($debt['document_type'] ?? ''));
+            $amount = (float) ($debt['amount'] ?? 0);
+
+            if ($amount <= 0 || str_contains($type, 'total a pagar')) {
+                continue;
+            }
+
+            if (str_contains($type, 'aseo')) {
+                $aseo += $amount;
+            } elseif (str_contains($type, 'energía') || str_contains($type, 'energia')) {
+                $energy += $amount;
+            }
+        }
+
+        return [
+            'aseo_balance' => round($aseo, 2),
+            'energy_balance' => round($energy, 2),
+            'other_balance' => 0.0,
         ];
     }
 }

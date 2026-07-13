@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\EnsureInternalNetwork;
+use App\Http\Middleware\EnsureSessionIsNotIdle;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,7 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [HandleInertiaRequests::class]);
-        $middleware->alias(['permission' => PermissionMiddleware::class]);
+        $middleware->alias([
+            'internal.network' => EnsureInternalNetwork::class,
+            'idle.timeout' => EnsureSessionIsNotIdle::class,
+            'permission' => PermissionMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -33,8 +39,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return Inertia::render('error', [
                 'status' => 403,
-                'title' => 'Acceso no autorizado',
-                'message' => 'No tienes permisos para acceder a esta seccion o realizar esta accion.',
+                'title' => $exception->getMessage() === 'Acceso restringido a la red institucional.' ? 'Acceso restringido' : 'Acceso no autorizado',
+                'message' => $exception->getMessage() === 'Acceso restringido a la red institucional.' ? 'Acceso restringido a la red institucional.' : 'No tienes permisos para acceder a esta seccion o realizar esta accion.',
                 'fallback' => '/paz-salvos/consultar',
             ])->toResponse($request)->setStatusCode(403);
         });

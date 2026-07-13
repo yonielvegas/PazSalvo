@@ -31,6 +31,7 @@ class PazSalvoHistoryController extends Controller
                 return [
                     'id' => $document->id,
                     'folio' => $document->folio,
+                    'numero_factura' => $document->numero_factura,
                     'client_number' => $document->client->client_number,
                     'holder_name' => $document->client->holder_name,
                     'agency_name' => $document->agency->name,
@@ -50,10 +51,11 @@ class PazSalvoHistoryController extends Controller
 
     public function show(PazSalvo $pazSalvo): Response
     {
-        $pazSalvo->load(['client', 'generatedBy:id,name', 'agency:id,name', 'userSignature.user:id,name', 'cancelledBy:id,name']);
+        $pazSalvo->load(['client', 'generatedBy:id,name', 'agency:id,name', 'generalAdminSignature.user:id,name', 'cancelledBy:id,name']);
         $document = [
             'id' => $pazSalvo->id,
             'folio' => $pazSalvo->folio,
+            'numero_factura' => $pazSalvo->numero_factura,
             'verification_token' => $pazSalvo->verification_token,
             'status' => $pazSalvo->status,
             'effective_status' => $pazSalvo->publicStatus(),
@@ -65,7 +67,7 @@ class PazSalvoHistoryController extends Controller
             'expires_at' => $pazSalvo->expires_at,
             'agency_name' => $pazSalvo->agency->name,
             'generated_by_name' => $pazSalvo->generatedBy->name,
-            'authorized_by_name' => $pazSalvo->userSignature?->user?->name,
+            'authorized_by_name' => $pazSalvo->generalAdminSignature?->user?->name,
             'cancelled_at' => $pazSalvo->cancelled_at,
             'cancel_reason' => $pazSalvo->cancel_reason,
             'cancelled_by' => $pazSalvo->cancelledBy,

@@ -2,7 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { Copy, Download, FileText } from 'lucide-react';
 import { AppLayout } from '@/components/app-layout';
 
-type Doc = { id:number; folio:string; verification_token:string; status:string; effective_status:string; client_number:string; holder_name:string; full_address:string; total_balance:string; issued_at:string; expires_at:string; agency_name:string; generated_by_name:string; authorized_by_name:string|null; cancelled_at:string|null; cancel_reason:string|null; cancelled_by?:{name:string}|null };
+type Doc = { id:number; folio:string; numero_factura:string|null; verification_token:string; status:string; effective_status:string; client_number:string; holder_name:string; full_address:string; total_balance:string; issued_at:string; expires_at:string; agency_name:string; generated_by_name:string; authorized_by_name:string|null; cancelled_at:string|null; cancel_reason:string|null; cancelled_by?:{name:string}|null };
 
 export default function Show({ document:d }: {document:Doc}) {
     const { flash } = usePage<{flash:{message?:string}}>().props;
@@ -40,12 +40,14 @@ export default function Show({ document:d }: {document:Doc}) {
 
                     <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">NAC</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{d.client_number}</dd></div>
+                        <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">N° Factura</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{d.numero_factura || '\u2014'}</dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Cliente</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{d.holder_name}</dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Estado</dt><dd className="mt-2"><span className={`status ${d.effective_status}`}>{d.effective_status}</span></dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4 sm:col-span-2 xl:col-span-3"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Direccion</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{d.full_address}</dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Balance</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">B/. {Number(d.total_balance).toFixed(2)}</dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Agencia</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{d.agency_name}</dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Elaborado por</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{d.generated_by_name}</dd></div>
+                        
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Autorizado por</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{d.authorized_by_name || 'No configurado'}</dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Fecha de emision</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{new Date(d.issued_at).toLocaleString('es-PA')}</dd></div>
                         <div className="rounded-2xl border border-[#e3ece9] bg-[#f8faf9] p-4"><dt className="text-xs font-semibold uppercase tracking-[0.14em] text-[#70817d]">Fecha de expiracion</dt><dd className="mt-2 text-sm font-semibold text-[#173d38]">{new Date(d.expires_at).toLocaleDateString('es-PA')}</dd></div>

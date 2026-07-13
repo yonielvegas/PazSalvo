@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\GeneralAdminSignature;
 use App\Models\PazSalvo;
 use App\Models\User;
-use App\Models\UserSignature;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -16,32 +16,33 @@ class PazSalvoService
 {
     public function __construct(
         private readonly WidergyDebtService $widergy,
+        private readonly SanMiguelitoLocationService $sanMiguelito,
         private readonly ClientExcelLookupService $lookup,
         private readonly CertificateNumberService $numbers,
         private readonly QrCodeService $qr,
         private readonly PazSalvoExcelService $excel,
         private readonly PdfConversionService $pdf,
+        private ?AuditLogger $audit = null,
     ) {}
 
-    public function generate(string $clientNumber, User $user): PazSalvo
+    public function generate(string $clientNumber, User $user, string $numeroFactura): PazSalvo
     {
         $user->loadMissing('agency');
         if (! $user->agency || ! $user->agency->is_active) {
             throw ValidationException::withMessages(['generation' => 'Debe tener una agencia activa asignada para emitir certificados.']);
         }
 
-        $activeSignature = UserSignature::where('agency_id', $user->agency_id)
-            ->where('is_active', true)
+        $generalAdminSignature = GeneralAdminSignature::where('is_active', true)
             ->with('user')
             ->first();
 
-        if (! $activeSignature || ! Storage::disk(config('paz-salvo.disk'))->exists($activeSignature->signature_path)) {
-            throw ValidationException::withMessages(['generation' => 'No hay un jefe de agencia activo con firma configurada para esta agencia.']);
+        if (! $generalAdminSignature || ! Storage::disk(config('paz-salvo.disk'))->exists($generalAdminSignature->signature_path)) {
+            throw ValidationException::withMessages(['generation' => 'No hay un Administrador General activo con firma configurada.']);
         }
 
-        $authorizedByName = $activeSignature->user->name;
-        $signaturePath = $activeSignature->signature_path;
-        $userSignatureId = $activeSignature->id;
+        $authorizedByName = $generalAdminSignature->user->name;
+        $authorizedSignaturePath = $generalAdminSignature->signature_path;
+        $generalAdminSignatureId = $generalAdminSignature->id;
 
         $payload = $this->widergy->consult($clientNumber);
         $result = $payload['result'];
@@ -50,8 +51,13 @@ class PazSalvoService
         if (! array_filter($account, fn ($v) => $v !== null && $v !== '')) {
             throw ValidationException::withMessages(['generation' => 'Widergy no devolvió información del cliente.']);
         }
-        if ((float) ($balances['total_balance'] ?? 0) > 0) {
-            throw ValidationException::withMessages(['generation' => 'El cliente tiene deuda en la reconsulta y ya no puede emitirse el certificado.']);
+        $validation = $this->sanMiguelito->validate($account['city'] ?? null);
+        if (! $validation['is_valid']) {
+            throw ValidationException::withMessages(['generation' => $validation['message']]);
+        }
+        $aseoBalance = (float) ($balances['aseo_balance'] ?? 0);
+        if ($aseoBalance > 0) {
+            throw ValidationException::withMessages(['generation' => 'El cliente mantiene saldo pendiente de Aseo y no puede generar paz y salvo.']);
         }
 
         $master = $this->lookup->findByClientNumber($clientNumber);
@@ -65,7 +71,7 @@ class PazSalvoService
         $expiresAt = $issuedAt->copy()->addDays(30);
         $token = (string) Str::uuid();
 
-        $record = DB::transaction(function () use ($user, $clientNumber, $account, $balances, $holder, $district, $corregimiento, $city, $address, $issuedAt, $expiresAt, $token, $userSignatureId) {
+        $record = DB::transaction(function () use ($user, $clientNumber, $numeroFactura, $account, $balances, $aseoBalance, $holder, $district, $corregimiento, $city, $address, $issuedAt, $expiresAt, $token, $generalAdminSignatureId) {
             $sequence = $this->numbers->reserve((int) $issuedAt->format('Y'));
             $client = Client::updateOrCreate(
                 ['client_number' => $clientNumber],
@@ -82,8 +88,9 @@ class PazSalvoService
             return PazSalvo::create([
                 'sequence_number' => $sequence['number'], 'sequence_year' => $sequence['year'], 'folio' => $sequence['folio'],
                 'verification_token' => $token, 'client_id' => $client->id, 'generated_by' => $user->id, 'agency_id' => $user->agency->id,
-                'user_signature_id' => $userSignatureId,
-                'total_balance' => (float) ($balances['total_balance'] ?? 0),
+                'general_admin_signature_id' => $generalAdminSignatureId,
+                'total_balance' => $aseoBalance,
+                'numero_factura' => $numeroFactura,
                 'issued_at' => $issuedAt, 'expires_at' => $expiresAt, 'status' => PazSalvo::PROCESSING,
             ]);
         });
@@ -91,7 +98,7 @@ class PazSalvoService
         $temporaryPaths = [];
         $pdfPath = null;
         try {
-            $record->load(['client', 'generatedBy', 'agency', 'userSignature.user']);
+            $record->load(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
             $verificationUrl = route('public.certificates.verify', ['token' => $record->verification_token]);
             $temporaryPaths[] = $qrPath = $this->qr->generate($verificationUrl, $record->folio);
             $documentData = [
@@ -104,10 +111,10 @@ class PazSalvoService
                 'balance_total' => $record->total_balance,
                 'issued_at' => $record->issued_at->timezone('America/Panama'),
                 'expires_at' => $record->expires_at->timezone('America/Panama'),
-                'authorized_by_name' => $authorizedByName,
                 'agency_name' => $record->agency->name,
                 'generated_by_name' => $record->generatedBy->name,
-                'signature_path' => $signaturePath,
+                'authorized_by_name' => $authorizedByName,
+                'authorized_signature_path' => $authorizedSignaturePath,
                 'legal_text' => config('paz-salvo.legal_text'),
             ];
             $temporaryPaths[] = $xlsxPath = $this->excel->generate($documentData, $qrPath);
@@ -119,8 +126,15 @@ class PazSalvoService
 
             $record->update(['pdf_path' => $pdfPath, 'status' => PazSalvo::GENERATED]);
             $disk->delete($temporaryPaths);
+            ($this->audit ??= app(AuditLogger::class))->record('paz_salvo.generated', [
+                'folio' => $record->folio,
+                'numero_factura' => $record->numero_factura,
+                'agency_id' => $record->agency_id,
+                'agency' => $record->agency->name,
+                'generated_by' => $record->generated_by,
+            ], $record);
 
-            return $record->fresh(['client', 'generatedBy', 'agency', 'userSignature.user']);
+            return $record->fresh(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
         } catch (\Throwable $e) {
             Storage::disk(config('paz-salvo.disk'))->delete(array_filter([...$temporaryPaths, $pdfPath]));
             $record->update(['status' => PazSalvo::ERROR, 'pdf_path' => null, 'generation_error' => Str::limit($e->getMessage(), 1000)]);

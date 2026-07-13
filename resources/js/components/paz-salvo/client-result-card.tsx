@@ -1,8 +1,7 @@
-import { Form } from '@inertiajs/react';
 import { CheckCircle2, FileText } from 'lucide-react';
 import type { QueryResult } from '@/types/paz-salvo';
 
-export function ClientResultCard({ result }: { result: QueryResult }) {
+export function ClientResultCard({ result, onGenerate }: { result: QueryResult; onGenerate: () => void }) {
     const location = [result.city, result.address].filter((value) => value?.trim()).join(' - ');
 
     return (
@@ -14,9 +13,7 @@ export function ClientResultCard({ result }: { result: QueryResult }) {
                 <div><dt>Dirección</dt><dd>{location || 'No informada'}</dd></div>
                 <div><dt>Tarifa</dt><dd>{result.rate || 'No informada'}</dd></div>
             </dl>
-            <Form action="/paz-salvos/generar" method="post">
-                {({ processing }) => <><input type="hidden" name="query_token" value={result.query_token} /><button className="generate-button" disabled={processing}><FileText /> {processing ? 'Reconsultando y generando…' : 'Generar certificado oficial'}</button></>}
-            </Form>
+            <button type="button" className="generate-button" onClick={onGenerate}><FileText /> Generar certificado oficial</button>
         </section>
     );
 }

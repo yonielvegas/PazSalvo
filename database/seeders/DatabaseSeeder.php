@@ -28,12 +28,16 @@ class DatabaseSeeder extends Seeder
         Role::firstOrCreate(['name' => 'supervisor', 'guard_name' => 'web'])->syncPermissions($models->only(['consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo', 'anular paz y salvo'])->values());
         Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web'])->syncPermissions($models->only(['consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo'])->values());
         Role::firstOrCreate(['name' => 'consulta', 'guard_name' => 'web'])->syncPermissions($models->only(['consultar paz y salvo', 'ver historial', 'ver detalle paz y salvo'])->values());
+        Role::firstOrCreate(['name' => 'administrador_general', 'guard_name' => 'web'])->syncPermissions($models->only(['consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo'])->values());
+
+        $allowedAgencyNames = ['PH Multiplaza', 'Los Andes', 'La Gran Estacion', 'Villa Lucre', 'San Miguelito'];
 
         $testAgencies = [
-            ['name' => 'Via Brasil', 'code' => 'VIA-BRASIL', 'users' => ['viabrasil1@aaud.gob.pa', 'viabrasil2@aaud.gob.pa']],
             ['name' => 'PH Multiplaza', 'code' => 'PH-MULTIPLAZA', 'users' => ['multiplaza1@aaud.gob.pa', 'multiplaza2@aaud.gob.pa']],
-            ['name' => 'Villa Lucre', 'code' => 'VILLA-LUCRE', 'users' => ['villalucre1@aaud.gob.pa', 'villalucre2@aaud.gob.pa']],
+            ['name' => 'Los Andes', 'code' => 'LOS-ANDES', 'users' => ['losandes1@aaud.gob.pa', 'losandes2@aaud.gob.pa']],
             ['name' => 'La Gran Estacion', 'code' => 'GRAN-ESTACION', 'users' => ['granestacion1@aaud.gob.pa', 'granestacion2@aaud.gob.pa']],
+            ['name' => 'Villa Lucre', 'code' => 'VILLA-LUCRE', 'users' => ['villalucre1@aaud.gob.pa', 'villalucre2@aaud.gob.pa']],
+            ['name' => 'San Miguelito', 'code' => 'SAN-MIGUELITO', 'users' => ['sanmiguelito1@aaud.gob.pa', 'sanmiguelito2@aaud.gob.pa']],
         ];
 
         $adminAgency = null;
@@ -64,6 +68,8 @@ class DatabaseSeeder extends Seeder
 
         }
 
+        Agency::whereNotIn('name', $allowedAgencyNames)->update(['is_active' => false]);
+
         $admin = User::firstOrCreate(
             ['email' => 'admin@aaud.gob.pa'],
             [
@@ -77,5 +83,16 @@ class DatabaseSeeder extends Seeder
             $admin->forceFill(['agency_id' => $adminAgency->id, 'is_active' => true])->save();
         }
         $admin->syncRoles(['admin']);
+
+        $generalAdmin = User::firstOrCreate(
+            ['email' => 'admin.general@aaud.gob.pa'],
+            [
+                'agency_id' => $adminAgency?->id,
+                'name' => 'Administrador General AAUD',
+                'password' => Hash::make('aaud.123'),
+                'is_active' => true,
+            ]
+        );
+        $generalAdmin->syncRoles(['administrador_general']);
     }
 }

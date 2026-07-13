@@ -2,10 +2,25 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { AppLayout } from '@/components/app-layout';
 import { Modal } from '@/components/ui/modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Plus, Pencil, UserCheck, UserX, X, AlertTriangle, Image as ImageIcon, Eye } from 'lucide-react';
+import { Plus, Pencil, UserCheck, UserX, X, AlertTriangle, Image as ImageIcon, Eye, UnlockKeyhole, LogOut } from 'lucide-react';
 import { useState, useCallback } from 'react';
 
-type User = { id: number; name: string; email: string; is_active: boolean; agency_id: number; agency: string | null; roles: string[]; has_active_signature: boolean; has_any_signature: boolean };
+type User = {
+    id: number;
+    name: string;
+    email: string;
+    is_active: boolean;
+    agency_id: number;
+    agency: string | null;
+    roles: string[];
+    has_active_general_admin_signature: boolean;
+    has_any_general_admin_signature: boolean;
+    login_attempts: number;
+    is_login_blocked: boolean;
+    has_active_session: boolean;
+    active_session_count: number;
+    active_session_last_activity: number | null;
+};
 type Agency = { id: number; name: string };
 
 type PageErrors = Record<string, string>;
@@ -13,7 +28,7 @@ type PageErrors = Record<string, string>;
 const initialCreate = { name: '', email: '', agency_id: '', role: '', password: '', password_confirmation: '', is_active: true };
 
 export default function UsersIndex({ users, agencies, roles }: { users: User[]; agencies: Agency[]; roles: string[] }) {
-    const { flash, errors: pageErrors } = usePage<{ flash: { message?: string }; errors: PageErrors & { needs_replace_confirmation?: string; current_supervisor_name?: string; activation_replace?: string } }>().props;
+    const { flash, errors: pageErrors } = usePage<{ flash: { message?: string }; errors: PageErrors & { needs_general_admin_replace_confirmation?: string; current_general_admin_name?: string; activation_replace?: string } }>().props;
 
     const [showCreate, setShowCreate] = useState(false);
     const [editUser, setEditUser] = useState<User | null>(null);
@@ -23,31 +38,31 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
     const [createErrors, setCreateErrors] = useState<PageErrors>({});
     const [editErrors, setEditErrors] = useState<PageErrors>({});
     const [toggleErrors, setToggleErrors] = useState<PageErrors>({});
-    const [processing, setProcessing] = useState<'create' | 'edit' | 'toggle' | 'toggle-replace' | null>(null);
+    const [processing, setProcessing] = useState<'create' | 'edit' | 'toggle' | 'toggle-replace' | 'toggle-general-admin-replace' | 'unlock-login' | 'release-session' | null>(null);
     const [dismissed, setDismissed] = useState(false);
-    const [createNeedsReplaceConfirm, setCreateNeedsReplaceConfirm] = useState(false);
-    const [editNeedsReplaceConfirm, setEditNeedsReplaceConfirm] = useState(false);
-    const [createCurrentSupervisorName, setCreateCurrentSupervisorName] = useState('');
-    const [editCurrentSupervisorName, setEditCurrentSupervisorName] = useState('');
-    const [createSignatureFile, setCreateSignatureFile] = useState<File | null>(null);
-    const [createSignatureName, setCreateSignatureName] = useState('');
-    const [editSignatureFile, setEditSignatureFile] = useState<File | null>(null);
-    const [editSignatureName, setEditSignatureName] = useState('');
+    const [createNeedsGeneralAdminReplaceConfirm, setCreateNeedsGeneralAdminReplaceConfirm] = useState(false);
+    const [editNeedsGeneralAdminReplaceConfirm, setEditNeedsGeneralAdminReplaceConfirm] = useState(false);
+    const [createCurrentGeneralAdminName, setCreateCurrentGeneralAdminName] = useState('');
+    const [editCurrentGeneralAdminName, setEditCurrentGeneralAdminName] = useState('');
+    const [createGeneralAdminSignatureFile, setCreateGeneralAdminSignatureFile] = useState<File | null>(null);
+    const [createGeneralAdminSignatureName, setCreateGeneralAdminSignatureName] = useState('');
+    const [editGeneralAdminSignatureFile, setEditGeneralAdminSignatureFile] = useState<File | null>(null);
+    const [editGeneralAdminSignatureName, setEditGeneralAdminSignatureName] = useState('');
     const [signaturePreviewUser, setSignaturePreviewUser] = useState<User | null>(null);
     const [toggleReplaceUser, setToggleReplaceUser] = useState<User | null>(null);
     const [toggleReplaceName, setToggleReplaceName] = useState('');
 
-    const isSupervisorRole = (role: string) => role === 'supervisor';
-    const canViewSignature = (u: User) => u.roles.includes('supervisor') || u.has_any_signature;
+    const isGeneralAdminRole = (role: string) => role === 'administrador_general';
+    const canViewSignature = (u: User) => u.roles.includes('administrador_general') || u.has_any_general_admin_signature;
 
     const openCreate = useCallback(() => {
         setShowCreate(true);
         setCreateForm(initialCreate);
         setCreateErrors({});
-        setCreateNeedsReplaceConfirm(false);
-        setCreateCurrentSupervisorName('');
-        setCreateSignatureFile(null);
-        setCreateSignatureName('');
+        setCreateNeedsGeneralAdminReplaceConfirm(false);
+        setCreateCurrentGeneralAdminName('');
+        setCreateGeneralAdminSignatureFile(null);
+        setCreateGeneralAdminSignatureName('');
     }, []);
 
     const openEdit = useCallback((user: User) => {
@@ -62,10 +77,10 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
             is_active: user.is_active,
         });
         setEditErrors({});
-        setEditNeedsReplaceConfirm(false);
-        setEditCurrentSupervisorName('');
-        setEditSignatureFile(null);
-        setEditSignatureName('');
+        setEditNeedsGeneralAdminReplaceConfirm(false);
+        setEditCurrentGeneralAdminName('');
+        setEditGeneralAdminSignatureFile(null);
+        setEditGeneralAdminSignatureName('');
     }, []);
 
     const openToggle = useCallback((user: User) => {
@@ -94,8 +109,8 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
         formData.append('password', createForm.password);
         formData.append('password_confirmation', createForm.password_confirmation);
         formData.append('is_active', createForm.is_active ? '1' : '0');
-        if (createSignatureFile) formData.append('signature', createSignatureFile);
-        if (createNeedsReplaceConfirm) formData.append('confirm_replace', '1');
+        if (createGeneralAdminSignatureFile) formData.append('general_admin_signature', createGeneralAdminSignatureFile);
+        if (createNeedsGeneralAdminReplaceConfirm) formData.append('confirm_replace', '1');
 
         router.post('/admin/users', formData, {
             preserveState: true,
@@ -107,15 +122,16 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 setDismissed(false);
             },
             onError: (errs) => {
-                if ((errs as Record<string, string>).needs_replace_confirmation) {
-                    setCreateNeedsReplaceConfirm(true);
-                    setCreateCurrentSupervisorName((errs as Record<string, string>).current_supervisor_name || '');
+                const e = errs as Record<string, string>;
+                if (e.needs_general_admin_replace_confirmation) {
+                    setCreateNeedsGeneralAdminReplaceConfirm(true);
+                    setCreateCurrentGeneralAdminName(e.current_general_admin_name || '');
                 }
                 setCreateErrors(errs);
                 setProcessing(null);
             },
         });
-    }, [createForm, createSignatureFile, createNeedsReplaceConfirm]);
+    }, [createForm, createGeneralAdminSignatureFile, createNeedsGeneralAdminReplaceConfirm]);
 
     const handleEdit = useCallback((e: React.FormEvent) => {
         e.preventDefault();
@@ -132,8 +148,8 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
             formData.append('password', editForm.password);
             formData.append('password_confirmation', editForm.password_confirmation);
         }
-        if (editSignatureFile) formData.append('signature', editSignatureFile);
-        if (editNeedsReplaceConfirm) formData.append('confirm_replace', '1');
+        if (editGeneralAdminSignatureFile) formData.append('general_admin_signature', editGeneralAdminSignatureFile);
+        if (editNeedsGeneralAdminReplaceConfirm) formData.append('confirm_replace', '1');
         formData.append('_method', 'PUT');
 
         router.post(`/admin/users/${editUser.id}`, formData, {
@@ -146,15 +162,16 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 setDismissed(false);
             },
             onError: (errs) => {
-                if ((errs as Record<string, string>).needs_replace_confirmation) {
-                    setEditNeedsReplaceConfirm(true);
-                    setEditCurrentSupervisorName((errs as Record<string, string>).current_supervisor_name || '');
+                const e = errs as Record<string, string>;
+                if (e.needs_general_admin_replace_confirmation) {
+                    setEditNeedsGeneralAdminReplaceConfirm(true);
+                    setEditCurrentGeneralAdminName(e.current_general_admin_name || '');
                 }
                 setEditErrors(errs);
                 setProcessing(null);
             },
         });
-    }, [editUser, editForm, editSignatureFile, editNeedsReplaceConfirm]);
+    }, [editUser, editForm, editGeneralAdminSignatureFile, editNeedsGeneralAdminReplaceConfirm]);
 
     const handleToggle = useCallback(() => {
         if (!toggleUser) return;
@@ -170,8 +187,8 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
             },
             onError: (errs) => {
                 const e = errs as Record<string, string>;
-                if (e.needs_replace_confirmation && e.activation_replace) {
-                    openToggleReplace(toggleUser, e.current_supervisor_name || '');
+                if (e.needs_general_admin_replace_confirmation && e.activation_replace) {
+                    openToggleReplace(toggleUser, e.current_general_admin_name || '');
                     setToggleErrors({});
                 } else {
                     setToggleErrors(errs);
@@ -199,6 +216,32 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
             },
         });
     }, [toggleUser]);
+
+    const handleUnlockLoginAttempts = useCallback((user: User) => {
+        if (!user.is_login_blocked && user.login_attempts === 0) return;
+        setProcessing('unlock-login');
+        router.patch(`/admin/users/${user.id}/unlock-login-attempts`, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => {
+                setProcessing(null);
+                setDismissed(false);
+            },
+        });
+    }, []);
+
+    const handleReleaseActiveSession = useCallback((user: User) => {
+        if (!user.has_active_session) return;
+        setProcessing('release-session');
+        router.patch(`/admin/users/${user.id}/release-session`, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => {
+                setProcessing(null);
+                setDismissed(false);
+            },
+        });
+    }, []);
 
     const showFlash = flash?.message && !dismissed;
 
@@ -253,18 +296,30 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                                     <td>{u.agency ?? <small style={{ color: '#a0b3b0' }}>Sin agencia</small>}</td>
                                     <td>
                                         {u.roles.map((r) => (
-                                            <span key={r} className={`role-badge ${r === 'supervisor' ? 'role-badge-supervisor' : ''}`} style={{ marginRight: 4 }}>
-                                                {r}
-                                                {r === 'supervisor' && u.has_active_signature && (
-                                                    <span style={{ marginLeft: 4, fontSize: 10 }}>· Jefe de agencia</span>
+                                            <span key={r} className={`role-badge ${r === 'administrador_general' ? 'role-badge-supervisor' : ''}`} style={{ marginRight: 4 }}>
+                                                {r === 'administrador_general' ? 'Administrador General' : r}
+                                                {r === 'administrador_general' && u.has_active_general_admin_signature && (
+                                                    <span style={{ marginLeft: 4, fontSize: 10 }}>· Activo</span>
                                                 )}
                                             </span>
                                         ))}
                                     </td>
                                     <td>
-                                        <span className={`status ${u.is_active ? 'valid' : 'cancelled'}`}>
-                                            {u.is_active ? 'Activo' : 'Inactivo'}
-                                        </span>
+                                        <div className="user-status-stack">
+                                            <span className={`user-state-badge ${u.is_active ? 'is-active' : 'is-inactive'}`}>
+                                                {u.is_active ? 'Activo' : 'Inactivo'}
+                                            </span>
+                                            {(u.is_login_blocked || u.login_attempts > 0) && (
+                                                <span className={`user-state-badge ${u.is_login_blocked ? 'is-login-blocked' : 'has-login-attempts'}`}>
+                                                    {u.is_login_blocked ? 'Login bloqueado' : 'Intentos fallidos'} · {u.login_attempts}/3
+                                                </span>
+                                            )}
+                                            {u.has_active_session && (
+                                                <span className="user-state-badge has-session">
+                                                    Sesión activa{u.active_session_count > 1 ? ` · ${u.active_session_count}` : ''}
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td>
                                         <div className="actions-cell">
@@ -280,9 +335,29 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                                                     <Pencil size={15} />
                                                 </button>
                                             </span>
+                                            <span className="tooltip" data-tip={u.is_login_blocked || u.login_attempts > 0 ? 'Desbloquear login' : 'Sin bloqueo de login'}>
+                                                <button
+                                                    className={`icon-btn ${u.is_login_blocked || u.login_attempts > 0 ? 'icon-btn-warning' : 'icon-btn-muted'}`}
+                                                    onClick={() => handleUnlockLoginAttempts(u)}
+                                                    aria-label="Desbloquear login"
+                                                    disabled={processing === 'unlock-login' || (!u.is_login_blocked && u.login_attempts === 0)}
+                                                >
+                                                    <UnlockKeyhole size={15} />
+                                                </button>
+                                            </span>
+                                            <span className="tooltip" data-tip={u.has_active_session ? 'Cerrar sesión activa' : 'Sin sesión activa'}>
+                                                <button
+                                                    className={`icon-btn ${u.has_active_session ? 'icon-btn-info' : 'icon-btn-muted'}`}
+                                                    onClick={() => handleReleaseActiveSession(u)}
+                                                    aria-label="Cerrar sesión activa"
+                                                    disabled={processing === 'release-session' || !u.has_active_session}
+                                                >
+                                                    <LogOut size={15} />
+                                                </button>
+                                            </span>
                                             <span className="tooltip" data-tip={u.is_active ? 'Desactivar usuario' : 'Activar usuario'}>
                                                 <button
-                                                    className={`icon-btn ${!u.is_active ? '' : 'icon-btn-danger'}`}
+                                                    className={`icon-btn ${u.is_active ? 'icon-btn-danger' : 'icon-btn-success'}`}
                                                     onClick={() => openToggle(u)}
                                                     aria-label={u.is_active ? 'Desactivar usuario' : 'Activar usuario'}
                                                 >
@@ -305,15 +380,15 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 description="Complete la informacion del usuario y asigne su agencia y rol."
             >
                 <form onSubmit={handleCreate} className="modal-form">
-                    {createNeedsReplaceConfirm && (
+                    {createNeedsGeneralAdminReplaceConfirm && (
                         <div className="replace-alert">
                             <div className="replace-alert-icon">
                                 <AlertTriangle size={20} />
                             </div>
                             <div>
-                                <p className="replace-alert-title">Esta agencia ya tiene un jefe activo</p>
+                                <p className="replace-alert-title">Ya existe un Administrador General activo</p>
                                 <p className="replace-alert-desc">
-                                    <strong>{createCurrentSupervisorName}</strong> es el jefe actual. Solo puede existir un jefe activo por agencia. Si confirmas, el jefe actual será desactivado.
+                                    <strong>{createCurrentGeneralAdminName}</strong> es el Administrador General actual. ¿Deseas desactivarlo y asignar este nuevo Administrador General?
                                 </p>
                             </div>
                         </div>
@@ -331,7 +406,7 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                     <div className="form-row">
                         <div className="form-group">
                             <label htmlFor="create-agency">Agencia</label>
-                            <select id="create-agency" value={createForm.agency_id} onChange={(e) => { setCreateForm({ ...createForm, agency_id: e.target.value }); setCreateNeedsReplaceConfirm(false); }} required>
+                            <select id="create-agency" value={createForm.agency_id} onChange={(e) => { setCreateForm({ ...createForm, agency_id: e.target.value }); return; }} required>
                                 <option value="">Seleccionar agencia</option>
                                 {agencies.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                             </select>
@@ -339,9 +414,9 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                         </div>
                         <div className="form-group">
                             <label htmlFor="create-role">Rol</label>
-                            <select id="create-role" value={createForm.role} onChange={(e) => setCreateForm({ ...createForm, role: e.target.value })} required>
+                            <select id="create-role" value={createForm.role} onChange={(e) => { setCreateForm({ ...createForm, role: e.target.value }); setCreateNeedsGeneralAdminReplaceConfirm(false); return; }} required>
                                 <option value="">Seleccionar rol</option>
-                                {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+                                {roles.map((r) => <option key={r} value={r}>{r === 'administrador_general' ? 'Administrador General' : r}</option>)}
                             </select>
                             {createErrors.role && <p className="field-error">{createErrors.role}</p>}
                         </div>
@@ -367,30 +442,30 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                         />
                         <label htmlFor="create-is-active" style={{ fontWeight: 700, fontSize: 13, margin: 0 }}>Activo</label>
                     </div>
-                    {isSupervisorRole(createForm.role) && (
+                    {isGeneralAdminRole(createForm.role) && (
                         <div className="form-group">
-                            <label htmlFor="create-signature">Foto de firma</label>
+                            <label htmlFor="create-general-admin-signature">Foto de firma del Administrador General</label>
                             <div className="file-input-wrapper">
-                                <input id="create-signature" type="file" accept="image/jpeg,image/png,image/webp"
+                                <input id="create-general-admin-signature" type="file" accept="image/jpeg,image/png,image/webp"
                                     onChange={(e) => {
                                         const file = e.target.files?.[0] ?? null;
-                                        setCreateSignatureFile(file);
-                                        setCreateSignatureName(file ? file.name : '');
+                                        setCreateGeneralAdminSignatureFile(file);
+                                        setCreateGeneralAdminSignatureName(file ? file.name : '');
                                     }}
                                 />
                                 <div className="file-input-fake">
-                                    <span className="file-input-text">{createSignatureName || 'Seleccionar archivo'}</span>
+                                    <span className="file-input-text">{createGeneralAdminSignatureName || 'Seleccionar archivo'}</span>
                                     <span className="file-input-btn">Examinar</span>
                                 </div>
                             </div>
                             <p className="file-help">JPG, PNG o WEBP, máximo 2MB</p>
-                            {createErrors.signature && <p className="field-error">{createErrors.signature}</p>}
+                            {createErrors.general_admin_signature && <p className="field-error">{createErrors.general_admin_signature}</p>}
                         </div>
                     )}
                     <div className="modal-footer">
                         <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} disabled={processing === 'create'}>Cancelar</button>
-                        <button type="submit" className={createNeedsReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'create'}>
-                            {processing === 'create' ? 'Creando…' : createNeedsReplaceConfirm ? 'Sí, reemplazar jefe' : 'Crear usuario'}
+                        <button type="submit" className={createNeedsGeneralAdminReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'create'}>
+                            {processing === 'create' ? 'Creando…' : createNeedsGeneralAdminReplaceConfirm ? 'Sí, reemplazar Administrador General' : 'Crear usuario'}
                         </button>
                     </div>
                 </form>
@@ -403,15 +478,15 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 description="Actualiza la informacion, agencia, rol o estado del usuario."
             >
                 <form onSubmit={handleEdit} className="modal-form">
-                    {editNeedsReplaceConfirm && (
+                    {editNeedsGeneralAdminReplaceConfirm && (
                         <div className="replace-alert">
                             <div className="replace-alert-icon">
                                 <AlertTriangle size={20} />
                             </div>
                             <div>
-                                <p className="replace-alert-title">Esta agencia ya tiene un jefe activo</p>
+                                <p className="replace-alert-title">Ya existe un Administrador General activo</p>
                                 <p className="replace-alert-desc">
-                                    <strong>{editCurrentSupervisorName}</strong> es el jefe actual. Solo puede existir un jefe activo por agencia. Si confirmas, el jefe actual será desactivado.
+                                    <strong>{editCurrentGeneralAdminName}</strong> es el Administrador General actual. ¿Deseas desactivarlo y asignar este nuevo Administrador General?
                                 </p>
                             </div>
                         </div>
@@ -429,15 +504,15 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                     <div className="form-row">
                         <div className="form-group">
                             <label htmlFor="edit-agency">Agencia</label>
-                            <select id="edit-agency" value={editForm.agency_id} onChange={(e) => { setEditForm({ ...editForm, agency_id: e.target.value }); setEditNeedsReplaceConfirm(false); }} required>
+                            <select id="edit-agency" value={editForm.agency_id} onChange={(e) => { setEditForm({ ...editForm, agency_id: e.target.value }); return; }} required>
                                 {agencies.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                             </select>
                             {editErrors.agency_id && <p className="field-error">{editErrors.agency_id}</p>}
                         </div>
                         <div className="form-group">
                             <label htmlFor="edit-role">Rol</label>
-                            <select id="edit-role" value={editForm.role} onChange={(e) => setEditForm({ ...editForm, role: e.target.value })} required>
-                                {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+                            <select id="edit-role" value={editForm.role} onChange={(e) => { setEditForm({ ...editForm, role: e.target.value }); setEditNeedsGeneralAdminReplaceConfirm(false); return; }} required>
+                                {roles.map((r) => <option key={r} value={r}>{r === 'administrador_general' ? 'Administrador General' : r}</option>)}
                             </select>
                             {editErrors.role && <p className="field-error">{editErrors.role}</p>}
                         </div>
@@ -463,39 +538,39 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                         />
                         <label htmlFor="edit-is-active" style={{ fontWeight: 700, fontSize: 13, margin: 0 }}>Activo</label>
                     </div>
-                    {isSupervisorRole(editForm.role) && (
+                    {isGeneralAdminRole(editForm.role) && (
                         <div className="form-group">
-                            <label>Firma del jefe de agencia</label>
-                            {editUser?.has_any_signature && (
+                            <label>Firma del Administrador General</label>
+                            {editUser?.has_any_general_admin_signature && (
                                 <div className="current-signature-info" style={{ marginBottom: 8 }}>
                                     <ImageIcon size={16} />
-                                    <span>Firma actual: {editUser.has_active_signature ? 'cargada' : 'inactiva'}</span>
+                                    <span>Firma actual: {editUser.has_active_general_admin_signature ? 'cargada' : 'inactiva'}</span>
                                     <button type="button" className="icon-btn" onClick={() => editUser && setSignaturePreviewUser(editUser)} style={{ marginLeft: 'auto' }} title="Ver firma">
                                         <Eye size={15} />
                                     </button>
                                 </div>
                             )}
                             <div className="file-input-wrapper">
-                                <input id="edit-signature" type="file" accept="image/jpeg,image/png,image/webp"
+                                <input id="edit-general-admin-signature" type="file" accept="image/jpeg,image/png,image/webp"
                                     onChange={(e) => {
                                         const file = e.target.files?.[0] ?? null;
-                                        setEditSignatureFile(file);
-                                        setEditSignatureName(file ? file.name : '');
+                                        setEditGeneralAdminSignatureFile(file);
+                                        setEditGeneralAdminSignatureName(file ? file.name : '');
                                     }}
                                 />
                                 <div className="file-input-fake">
-                                    <span className="file-input-text">{editSignatureName || (editUser?.has_active_signature ? 'Reemplazar firma (opcional)' : 'Seleccionar archivo')}</span>
+                                    <span className="file-input-text">{editGeneralAdminSignatureName || (editUser?.has_active_general_admin_signature ? 'Reemplazar firma (opcional)' : 'Seleccionar archivo')}</span>
                                     <span className="file-input-btn">Examinar</span>
                                 </div>
                             </div>
-                            <p className="file-help">JPG, PNG o WEBP, máximo 2MB. {editUser?.has_active_signature ? 'Si no selecciona archivo, se conserva la firma actual.' : 'La firma es obligatoria para el rol supervisor.'}</p>
-                            {editErrors.signature && <p className="field-error">{editErrors.signature}</p>}
+                            <p className="file-help">JPG, PNG o WEBP, máximo 2MB. {editUser?.has_active_general_admin_signature ? 'Si no selecciona archivo, se conserva la firma actual.' : 'La firma es obligatoria para el rol Administrador General.'}</p>
+                            {editErrors.general_admin_signature && <p className="field-error">{editErrors.general_admin_signature}</p>}
                         </div>
                     )}
                     <div className="modal-footer">
                         <button type="button" className="btn-secondary" onClick={() => setEditUser(null)} disabled={processing === 'edit'}>Cancelar</button>
-                        <button type="submit" className={editNeedsReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'edit'}>
-                            {processing === 'edit' ? 'Guardando…' : editNeedsReplaceConfirm ? 'Sí, reemplazar jefe' : 'Guardar cambios'}
+                        <button type="submit" className={editNeedsGeneralAdminReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'edit'}>
+                            {processing === 'edit' ? 'Guardando…' : editNeedsGeneralAdminReplaceConfirm ? 'Sí, reemplazar Administrador General' : 'Guardar cambios'}
                         </button>
                     </div>
                 </form>
@@ -519,15 +594,15 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 open={toggleReplaceUser !== null}
                 onClose={() => { if (processing !== 'toggle-replace') { setToggleUser(null); setToggleReplaceUser(null); } }}
                 onConfirm={handleToggleReplace}
-                title="Reemplazar jefe activo"
+                title="Reemplazar autorizado activo"
                 message={
                     <>
-                        Esta agencia ya tiene un jefe activo:<br />
+                        Ya existe un autorizado activo:<br />
                         <strong>{toggleReplaceName}</strong><br /><br />
-                        ¿Deseas desactivarlo y activar este jefe?
+                        ¿Deseas desactivarlo y activar este usuario?
                     </>
                 }
-                confirmLabel="Sí, reemplazar jefe"
+                confirmLabel="Sí, reemplazar"
                 processing={processing === 'toggle-replace'}
             />
 
@@ -540,8 +615,12 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 {signaturePreviewUser && (
                     <div style={{ textAlign: 'center' }}>
                         <p style={{ marginBottom: 16, color: '#71817e', fontSize: 14 }}>
-                            Estado: <span style={{ fontWeight: 700, color: signaturePreviewUser.has_active_signature ? '#166534' : '#991b1b' }}>
-                                {signaturePreviewUser.has_active_signature ? 'Activa' : 'Inactiva'}
+                            {signaturePreviewUser.roles.includes('administrador_general')
+                                ? 'Firma de Administrador General'
+                                : 'Firma del usuario'}
+                            {' · '}
+                            Estado: <span style={{ fontWeight: 700, color: signaturePreviewUser.has_active_general_admin_signature ? '#166534' : '#991b1b' }}>
+                                {signaturePreviewUser.has_active_general_admin_signature ? 'Activa' : 'Inactiva'}
                             </span>
                         </p>
                         <div style={{

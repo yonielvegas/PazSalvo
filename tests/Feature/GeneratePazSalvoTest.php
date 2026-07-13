@@ -58,4 +58,41 @@ class GeneratePazSalvoTest extends TestCase
         $this->get(route('public.certificates.pdf', $document->verification_token))->assertForbidden();
         $this->actingAs($user)->patch(route('paz-salvos.cancel', $document), ['cancel_reason' => 'Segundo intento inválido'])->assertSessionHasErrors('cancel_reason');
     }
+
+    public function test_expired_certificate_shows_expired_status_and_no_pdf_button(): void
+    {
+        $document = PazSalvo::factory()->create(['expires_at' => now()->subDay()]);
+        $this->get(route('public.certificates.verify', $document->verification_token))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('public/verify')
+                ->where('certificate.folio', $document->folio)
+                ->where('certificate.status', 'expired')
+                ->where('certificate.pdf_url', null)
+            );
+    }
+
+    public function test_expired_certificate_pdf_is_forbidden(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('generated/expired.pdf', '%PDF-expired');
+        $document = PazSalvo::factory()->create([
+            'expires_at' => now()->subDay(),
+            'pdf_path' => 'generated/expired.pdf',
+        ]);
+        $this->get(route('public.certificates.pdf', $document->verification_token))
+            ->assertForbidden();
+    }
+
+    public function test_valid_certificate_pdf_is_accessible(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('generated/valid.pdf', '%PDF-valid');
+        $document = PazSalvo::factory()->create([
+            'expires_at' => now()->addDays(30),
+            'pdf_path' => 'generated/valid.pdf',
+        ]);
+        $this->get(route('public.certificates.pdf', $document->verification_token))
+            ->assertOk();
+    }
 }

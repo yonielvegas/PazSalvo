@@ -13,15 +13,14 @@ class ConsultPazSalvoRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['client_number' => ['required', 'string', 'regex:/^\d+$/', 'max:30']];
+        return ['client_number' => ['required', 'string', 'regex:/^\d{1,12}$/']];
     }
 
     public function messages(): array
     {
         return [
             'client_number.required' => 'Ingrese el NAC del cliente.',
-            'client_number.regex' => 'El NAC solo puede contener números.',
-            'client_number.max' => 'El NAC no puede superar 30 dígitos.',
+            'client_number.regex' => 'El NAC debe contener solo números y máximo 12 dígitos.',
         ];
     }
 }

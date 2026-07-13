@@ -21,6 +21,9 @@ class HandleInertiaRequests extends Middleware
             'result' => fn () => $request->session()->get('result'),
             'document' => fn () => $request->session()->get('document'),
             'message' => fn () => $request->session()->get('message'),
+            'error' => fn () => $request->session()->get('error'),
+            'validation_not_found' => fn () => $request->session()->get('validation_not_found'),
+            'validation_not_found_id' => fn () => $request->session()->get('validation_not_found_id'),
         ]];
     }
 }

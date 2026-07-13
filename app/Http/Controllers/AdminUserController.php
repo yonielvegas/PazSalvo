@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Agency;
+use App\Models\GeneralAdminSignature;
 use App\Models\User;
-use App\Models\UserSignature;
+use App\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -18,19 +20,35 @@ class AdminUserController extends Controller
 {
     public function index(): Response
     {
+        $activeSessions = DB::table('sessions')
+            ->select('user_id', DB::raw('count(*) as active_session_count'), DB::raw('max(last_activity) as active_session_last_activity'))
+            ->whereNotNull('user_id')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id');
+
         return Inertia::render('admin/users/index', [
-            'users' => User::with('agency:id,name')->withCount('generatedPazSalvos')->orderBy('name')->get()->map(fn (User $user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'is_active' => $user->is_active,
-                'agency_id' => $user->agency_id,
-                'agency' => $user->agency?->name,
-                'roles' => $user->getRoleNames()->values(),
-                'has_active_signature' => $user->activeSignature()->exists(),
-                'has_any_signature' => $user->userSignatures()->exists(),
-                'generated_paz_salvos_count' => $user->generated_paz_salvos_count,
-            ]),
+            'users' => User::with('agency:id,name')->withCount('generatedPazSalvos')->orderBy('name')->get()->map(function (User $user) use ($activeSessions) {
+                $session = $activeSessions->get($user->id);
+
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'is_active' => $user->is_active,
+                    'agency_id' => $user->agency_id,
+                    'agency' => $user->agency?->name,
+                    'roles' => $user->getRoleNames()->values(),
+                    'has_active_general_admin_signature' => $user->activeGeneralAdminSignature()->exists(),
+                    'has_any_general_admin_signature' => $user->generalAdminSignatures()->exists(),
+                    'login_attempts' => $user->login_attempts,
+                    'is_login_blocked' => $user->is_login_blocked,
+                    'has_active_session' => $session !== null,
+                    'active_session_count' => (int) ($session->active_session_count ?? 0),
+                    'active_session_last_activity' => isset($session->active_session_last_activity) ? (int) $session->active_session_last_activity : null,
+                    'generated_paz_salvos_count' => $user->generated_paz_salvos_count,
+                ];
+            }),
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'roles' => Role::orderBy('name')->pluck('name'),
         ]);
@@ -45,55 +63,53 @@ class AdminUserController extends Controller
             'role' => ['required', 'exists:roles,name'],
             'password' => ['required', 'string', 'confirmed', 'min:8'],
             'is_active' => ['boolean'],
-            'signature' => ['required_if:role,supervisor', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'general_admin_signature' => ['required_if:role,administrador_general', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
         $data['is_active'] ??= true;
         $role = $data['role'];
         unset($data['role']);
 
-        if ($role === 'supervisor') {
-            $existingSupervisor = User::whereHas('roles', fn ($q) => $q->where('name', 'supervisor'))
-                ->where('agency_id', $data['agency_id'])
+        if ($role === 'administrador_general') {
+            $existingGeneralAdmin = User::whereHas('roles', fn ($q) => $q->where('name', 'administrador_general'))
                 ->where('is_active', true)
                 ->first();
 
-            if ($existingSupervisor && !$request->boolean('confirm_replace')) {
+            if ($existingGeneralAdmin && !$request->boolean('confirm_replace')) {
                 return back()->withErrors([
-                    'role' => 'Esta agencia ya tiene un supervisor activo.',
-                    'needs_replace_confirmation' => 'true',
-                    'current_supervisor_name' => $existingSupervisor->name,
+                    'role' => 'Ya existe un Administrador General activo.',
+                    'needs_general_admin_replace_confirmation' => 'true',
+                    'current_general_admin_name' => $existingGeneralAdmin->name,
                 ]);
             }
 
-            if ($existingSupervisor && $request->boolean('confirm_replace')) {
-                UserSignature::where('user_id', $existingSupervisor->id)
+            if ($existingGeneralAdmin && $request->boolean('confirm_replace')) {
+                GeneralAdminSignature::where('user_id', $existingGeneralAdmin->id)
                     ->where('is_active', true)
                     ->update([
                         'is_active' => false,
                         'deactivated_by' => $request->user()->id,
                         'deactivated_at' => now(),
-                        'deactivation_reason' => 'Reemplazado por nuevo jefe de agencia.',
+                        'deactivation_reason' => 'Reemplazado por nuevo Administrador General.',
                     ]);
 
-                $existingSupervisor->update(['is_active' => false]);
+                $existingGeneralAdmin->update(['is_active' => false]);
             }
 
-            unset($data['signature']);
+            unset($data['general_admin_signature']);
         }
 
         $user = User::create($data);
         $user->syncRoles([$role]);
 
-        if ($role === 'supervisor' && $request->hasFile('signature')) {
-            $signaturePath = $request->file('signature')->store(
-                'user-signatures/' . $user->id,
+        if ($role === 'administrador_general' && $request->hasFile('general_admin_signature')) {
+            $signaturePath = $request->file('general_admin_signature')->store(
+                'general-admin-signatures/' . $user->id,
                 config('paz-salvo.disk')
             );
 
-            UserSignature::create([
+            GeneralAdminSignature::create([
                 'user_id' => $user->id,
-                'agency_id' => $data['agency_id'],
                 'signature_path' => $signaturePath,
                 'is_active' => true,
                 'created_by' => $request->user()->id,
@@ -112,60 +128,49 @@ class AdminUserController extends Controller
             'role' => ['required', 'exists:roles,name'],
             'password' => ['nullable', 'string', 'confirmed', 'min:8'],
             'is_active' => ['boolean'],
-            'signature' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'general_admin_signature' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
         $newRole = $data['role'];
-        $wasSupervisor = $user->hasRole('supervisor');
-        $isSupervisor = $newRole === 'supervisor';
-        $hasActiveSignature = $user->activeSignature()->exists();
-        $agencyChanged = $user->agency_id != $data['agency_id'];
+        $wasGeneralAdmin = $user->hasRole('administrador_general');
+        $isGeneralAdmin = $newRole === 'administrador_general';
+        $hasActiveGeneralAdminSignature = $user->activeGeneralAdminSignature()->exists();
 
         unset($data['role']);
         if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
 
-        if ($isSupervisor) {
-            $existingSupervisor = User::whereHas('roles', fn ($q) => $q->where('name', 'supervisor'))
-                ->where('agency_id', $data['agency_id'])
+        if ($isGeneralAdmin) {
+            $existingGeneralAdmin = User::whereHas('roles', fn ($q) => $q->where('name', 'administrador_general'))
                 ->where('is_active', true)
                 ->where('id', '!=', $user->id)
                 ->first();
 
-            if ($existingSupervisor && !$request->boolean('confirm_replace')) {
+            if ($existingGeneralAdmin && !$request->boolean('confirm_replace')) {
                 return back()->withErrors([
-                    'role' => 'Esta agencia ya tiene un supervisor activo.',
-                    'needs_replace_confirmation' => 'true',
-                    'current_supervisor_name' => $existingSupervisor->name,
+                    'role' => 'Ya existe un Administrador General activo.',
+                    'needs_general_admin_replace_confirmation' => 'true',
+                    'current_general_admin_name' => $existingGeneralAdmin->name,
                 ]);
             }
 
-            if ($existingSupervisor && $request->boolean('confirm_replace')) {
-                UserSignature::where('user_id', $existingSupervisor->id)
+            if ($existingGeneralAdmin && $request->boolean('confirm_replace')) {
+                GeneralAdminSignature::where('user_id', $existingGeneralAdmin->id)
                     ->where('is_active', true)
                     ->update([
                         'is_active' => false,
                         'deactivated_by' => $request->user()->id,
                         'deactivated_at' => now(),
-                        'deactivation_reason' => 'Reemplazado por nuevo jefe de agencia.',
+                        'deactivation_reason' => 'Reemplazado por nuevo Administrador General.',
                     ]);
 
-                $existingSupervisor->update(['is_active' => false]);
+                $existingGeneralAdmin->update(['is_active' => false]);
             }
 
-            if ($wasSupervisor && $agencyChanged) {
-                $user->activeSignature()?->update([
-                    'is_active' => false,
-                    'deactivated_by' => $request->user()->id,
-                    'deactivated_at' => now(),
-                    'deactivation_reason' => 'Agencia cambiada.',
-                ]);
-            }
-
-            if ($request->hasFile('signature')) {
-                if ($hasActiveSignature) {
-                    $user->activeSignature()->update([
+            if ($request->hasFile('general_admin_signature')) {
+                if ($hasActiveGeneralAdminSignature) {
+                    $user->activeGeneralAdminSignature()->update([
                         'is_active' => false,
                         'deactivated_by' => $request->user()->id,
                         'deactivated_at' => now(),
@@ -173,32 +178,31 @@ class AdminUserController extends Controller
                     ]);
                 }
 
-                $signaturePath = $request->file('signature')->store(
-                    'user-signatures/' . $user->id,
+                $signaturePath = $request->file('general_admin_signature')->store(
+                    'general-admin-signatures/' . $user->id,
                     config('paz-salvo.disk')
                 );
 
-                UserSignature::create([
+                GeneralAdminSignature::create([
                     'user_id' => $user->id,
-                    'agency_id' => $data['agency_id'],
                     'signature_path' => $signaturePath,
                     'is_active' => true,
                     'created_by' => $request->user()->id,
                 ]);
             }
 
-            $hasActiveAfterSave = $user->fresh()->activeSignature()->exists();
-            if (!$hasActiveAfterSave && !$request->hasFile('signature')) {
-                return back()->withErrors(['signature' => 'La foto de firma es obligatoria para el rol supervisor.']);
+            $hasActiveAfterSave = $user->fresh()->activeGeneralAdminSignature()->exists();
+            if (!$hasActiveAfterSave && !$request->hasFile('general_admin_signature')) {
+                return back()->withErrors(['general_admin_signature' => 'La foto de firma es obligatoria para el rol Administrador General.']);
             }
 
-            unset($data['signature']);
-        } elseif ($wasSupervisor) {
-            $user->activeSignature()?->update([
+            unset($data['general_admin_signature']);
+        } elseif ($wasGeneralAdmin) {
+            $user->activeGeneralAdminSignature()?->update([
                 'is_active' => false,
                 'deactivated_by' => $request->user()->id,
                 'deactivated_at' => now(),
-                'deactivation_reason' => 'Rol supervisor retirado.',
+                'deactivation_reason' => 'Rol Administrador General retirado.',
             ]);
         }
 
@@ -216,42 +220,41 @@ class AdminUserController extends Controller
 
         $isActivating = !$user->is_active;
 
-        if ($isActivating && $user->isSupervisor()) {
-            if (!$user->userSignatures()->exists()) {
-                return back()->withErrors(['user' => 'Este supervisor no tiene una firma registrada. Edita el usuario y sube una firma antes de activarlo.']);
+        if ($isActivating && $user->isGeneralAdmin()) {
+            if (!$user->generalAdminSignatures()->exists()) {
+                return back()->withErrors(['user' => 'Este Administrador General no tiene una firma registrada. Edita el usuario y sube una firma antes de activarlo.']);
             }
 
-            $existingSupervisor = User::whereHas('roles', fn ($q) => $q->where('name', 'supervisor'))
-                ->where('agency_id', $user->agency_id)
+            $existingGeneralAdmin = User::whereHas('roles', fn ($q) => $q->where('name', 'administrador_general'))
                 ->where('is_active', true)
                 ->where('id', '!=', $user->id)
                 ->first();
 
-            if ($existingSupervisor && !$request->boolean('confirm_replace')) {
+            if ($existingGeneralAdmin && !$request->boolean('confirm_replace')) {
                 return back()->withErrors([
-                    'user' => 'Esta agencia ya tiene un jefe activo.',
-                    'needs_replace_confirmation' => 'true',
-                    'current_supervisor_name' => $existingSupervisor->name,
+                    'user' => 'Ya existe un Administrador General activo.',
+                    'needs_general_admin_replace_confirmation' => 'true',
+                    'current_general_admin_name' => $existingGeneralAdmin->name,
                     'activation_replace' => 'true',
                 ]);
             }
 
-            if ($existingSupervisor && $request->boolean('confirm_replace')) {
-                $existingSupervisor->update(['is_active' => false]);
+            if ($existingGeneralAdmin && $request->boolean('confirm_replace')) {
+                $existingGeneralAdmin->update(['is_active' => false]);
 
-                UserSignature::where('user_id', $existingSupervisor->id)
+                GeneralAdminSignature::where('user_id', $existingGeneralAdmin->id)
                     ->where('is_active', true)
                     ->update([
                         'is_active' => false,
                         'deactivated_by' => $request->user()->id,
                         'deactivated_at' => now(),
-                        'deactivation_reason' => 'Reemplazado por reactivación de supervisor anterior.',
+                        'deactivation_reason' => 'Reemplazado por reactivación de Administrador General anterior.',
                     ]);
             }
 
             $user->update(['is_active' => true]);
 
-            $lastSignature = $user->userSignatures()->latest('id')->first();
+            $lastSignature = $user->generalAdminSignatures()->latest('id')->first();
             if ($lastSignature && !$lastSignature->is_active) {
                 $lastSignature->update(['is_active' => true]);
             }
@@ -261,8 +264,8 @@ class AdminUserController extends Controller
 
         $user->update(['is_active' => !$user->is_active]);
 
-        if (!$user->is_active && $user->isSupervisor()) {
-            $user->activeSignature()?->update([
+        if (!$user->is_active && $user->isGeneralAdmin()) {
+            $user->activeGeneralAdminSignature()?->update([
                 'is_active' => false,
                 'deactivated_by' => $request->user()->id,
                 'deactivated_at' => now(),
@@ -276,11 +279,50 @@ class AdminUserController extends Controller
 
     public function signature(User $user): BinaryFileResponse
     {
-        $signature = $user->activeSignature()->first() ?? $user->userSignatures()->latest('id')->first();
+        $generalAdminSignature = $user->activeGeneralAdminSignature()->first()
+            ?? $user->generalAdminSignatures()->latest('id')->first();
 
-        abort_unless($signature && Storage::disk(config('paz-salvo.disk'))->exists($signature->signature_path), 404);
+        abort_unless($generalAdminSignature && Storage::disk(config('paz-salvo.disk'))->exists($generalAdminSignature->signature_path), 404);
 
-        return response()->file(Storage::disk(config('paz-salvo.disk'))->path($signature->signature_path));
+        return response()->file(Storage::disk(config('paz-salvo.disk'))->path($generalAdminSignature->signature_path));
+    }
+
+    public function unlockLoginAttempts(Request $request, User $user, AuditLogger $audit): RedirectResponse
+    {
+        if (! $user->is_login_blocked && (int) $user->login_attempts === 0) {
+            return back()->with('message', 'El usuario no tiene bloqueos activos por intentos fallidos.');
+        }
+
+        $user->forceFill([
+            'is_login_blocked' => false,
+            'login_attempts' => 0,
+        ])->save();
+
+        $audit->record('login.unblocked', [
+            'target_user_id' => $user->id,
+            'target_email' => $user->email,
+            'is_active' => $user->is_active,
+        ], $user, $request);
+
+        return back()->with('message', 'Login desbloqueado correctamente.');
+    }
+
+    public function releaseActiveSession(Request $request, User $user, AuditLogger $audit): RedirectResponse
+    {
+        $deleted = DB::table('sessions')->where('user_id', $user->id)->delete();
+
+        if ($deleted === 0) {
+            return back()->with('message', 'El usuario no tiene sesión activa.');
+        }
+
+        $audit->record('user.session_released', [
+            'target_user_id' => $user->id,
+            'target_email' => $user->email,
+            'sessions_deleted' => $deleted,
+            'is_active' => $user->is_active,
+        ], $user, $request);
+
+        return back()->with('message', 'Sesión activa liberada correctamente.');
     }
 
     public function destroy(User $user): RedirectResponse

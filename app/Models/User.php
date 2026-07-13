@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\GeneralAdminSignature;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,6 +27,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
+            'is_login_blocked' => 'boolean',
+            'login_attempts' => 'integer',
             'password' => 'hashed',
         ];
     }
@@ -40,18 +43,23 @@ class User extends Authenticatable
         return $this->hasMany(PazSalvo::class, 'generated_by');
     }
 
-    public function userSignatures(): HasMany
-    {
-        return $this->hasMany(UserSignature::class);
-    }
-
-    public function activeSignature(): HasOne
-    {
-        return $this->hasOne(UserSignature::class)->where('is_active', true);
-    }
-
     public function isSupervisor(): bool
     {
         return $this->hasRole('supervisor');
+    }
+
+    public function isGeneralAdmin(): bool
+    {
+        return $this->hasRole('administrador_general');
+    }
+
+    public function generalAdminSignatures(): HasMany
+    {
+        return $this->hasMany(GeneralAdminSignature::class);
+    }
+
+    public function activeGeneralAdminSignature(): HasOne
+    {
+        return $this->hasOne(GeneralAdminSignature::class)->where('is_active', true);
     }
 }

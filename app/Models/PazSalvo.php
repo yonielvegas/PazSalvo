@@ -49,9 +49,9 @@ class PazSalvo extends Model
         return $this->belongsTo(User::class, 'cancelled_by');
     }
 
-    public function userSignature(): BelongsTo
+    public function generalAdminSignature(): BelongsTo
     {
-        return $this->belongsTo(UserSignature::class);
+        return $this->belongsTo(GeneralAdminSignature::class);
     }
 
     public function publicStatus(): string
