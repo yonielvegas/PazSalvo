@@ -23,10 +23,25 @@ class PazSalvoService
         private readonly PazSalvoExcelService $excel,
         private readonly PdfConversionService $pdf,
         private ?AuditLogger $audit = null,
+        private ?PublicVerificationUrlBuilder $verificationUrlBuilder = null,
     ) {}
 
-    public function generate(string $clientNumber, User $user, string $numeroFactura): PazSalvo
+    public function generate(string $clientNumber, User $user, string $numeroFactura, ?string $generationRequestId = null): PazSalvo
     {
+        if ($generationRequestId) {
+            $existing = PazSalvo::where('generation_request_id', $generationRequestId)
+                ->whereIn('status', [PazSalvo::PROCESSING, PazSalvo::GENERATED])
+                ->first();
+            if ($existing) {
+                ($this->audit ??= app(AuditLogger::class))->record('paz_salvo.reused_generation_request', [
+                    'folio' => $existing->folio,
+                    'status' => $existing->status,
+                ], $existing, request(), 'success');
+
+                return $existing->fresh(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
+            }
+        }
+
         $user->loadMissing('agency');
         if (! $user->agency || ! $user->agency->is_active) {
             throw ValidationException::withMessages(['generation' => 'Debe tener una agencia activa asignada para emitir certificados.']);
@@ -71,7 +86,13 @@ class PazSalvoService
         $expiresAt = $issuedAt->copy()->addDays(30);
         $token = (string) Str::uuid();
 
-        $record = DB::transaction(function () use ($user, $clientNumber, $numeroFactura, $account, $balances, $aseoBalance, $holder, $district, $corregimiento, $city, $address, $issuedAt, $expiresAt, $token, $generalAdminSignatureId) {
+        $record = DB::transaction(function () use ($user, $clientNumber, $numeroFactura, $account, $aseoBalance, $holder, $district, $corregimiento, $city, $address, $issuedAt, $expiresAt, $token, $generalAdminSignatureId, $generationRequestId) {
+            if ($generationRequestId) {
+                $existing = PazSalvo::where('generation_request_id', $generationRequestId)->lockForUpdate()->first();
+                if ($existing) {
+                    return $existing;
+                }
+            }
             $sequence = $this->numbers->reserve((int) $issuedAt->format('Y'));
             $client = Client::updateOrCreate(
                 ['client_number' => $clientNumber],
@@ -87,7 +108,7 @@ class PazSalvoService
 
             return PazSalvo::create([
                 'sequence_number' => $sequence['number'], 'sequence_year' => $sequence['year'], 'folio' => $sequence['folio'],
-                'verification_token' => $token, 'client_id' => $client->id, 'generated_by' => $user->id, 'agency_id' => $user->agency->id,
+                'verification_token' => $token, 'generation_request_id' => $generationRequestId, 'client_id' => $client->id, 'generated_by' => $user->id, 'agency_id' => $user->agency->id,
                 'general_admin_signature_id' => $generalAdminSignatureId,
                 'total_balance' => $aseoBalance,
                 'numero_factura' => $numeroFactura,
@@ -99,7 +120,10 @@ class PazSalvoService
         $pdfPath = null;
         try {
             $record->load(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
-            $verificationUrl = route('public.certificates.verify', ['token' => $record->verification_token]);
+            if ($record->status === PazSalvo::GENERATED && $record->pdf_path) {
+                return $record;
+            }
+            $verificationUrl = ($this->verificationUrlBuilder ??= app(PublicVerificationUrlBuilder::class))->build($record->verification_token);
             $temporaryPaths[] = $qrPath = $this->qr->generate($verificationUrl, $record->folio);
             $documentData = [
                 'folio' => $record->folio,

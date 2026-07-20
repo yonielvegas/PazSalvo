@@ -1,8 +1,13 @@
 <?php
 
+use App\Http\Middleware\AddSecurityHeaders;
+use App\Http\Middleware\AssignRequestId;
 use App\Http\Middleware\EnsureInternalNetwork;
+use App\Http\Middleware\EnsurePasswordHasBeenChanged;
 use App\Http\Middleware\EnsureSessionIsNotIdle;
+use App\Http\Middleware\EnsureSingleActiveSession;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\ValidateHostHeader;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,11 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [HandleInertiaRequests::class]);
+        $middleware->web(append: [AssignRequestId::class, ValidateHostHeader::class, AddSecurityHeaders::class, HandleInertiaRequests::class]);
         $middleware->redirectUsersTo('/paz-salvos/consultar');
         $middleware->alias([
             'internal.network' => EnsureInternalNetwork::class,
             'idle.timeout' => EnsureSessionIsNotIdle::class,
+            'password.changed' => EnsurePasswordHasBeenChanged::class,
+            'single.session' => EnsureSingleActiveSession::class,
             'permission' => PermissionMiddleware::class,
         ]);
     })
@@ -31,7 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request) => $request->is('api/*'),
         );
 
-        $exceptions->render(function (\Throwable $exception, Request $request) {
+        $exceptions->render(function (Throwable $exception, Request $request) {
             $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : null;
 
             if ($status !== 403 || ! $request->isMethod('GET') || (! $request->header('X-Inertia') && $request->expectsJson())) {

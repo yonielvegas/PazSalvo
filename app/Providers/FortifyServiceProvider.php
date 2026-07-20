@@ -2,24 +2,26 @@
 
 namespace App\Providers;
 
-use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\AttemptToAuthenticateWithSpanishMessages;
+use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Actions\Fortify\UpdateUserPassword;
 use App\Actions\Fortify\UpdateUserProfileInformation;
 use App\Models\User;
+use App\Services\AuditLogger;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Laravel\Fortify\Actions\CanonicalizeUsername;
 use Laravel\Fortify\Actions\EnsureLoginIsNotThrottled;
 use Laravel\Fortify\Actions\PrepareAuthenticatedSession;
-use Laravel\Fortify\Contracts\RedirectsIfTwoFactorAuthenticatable;
-use Laravel\Fortify\Features;
+use Laravel\Fortify\Contracts\LoginResponse;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -29,7 +31,18 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        Fortify::ignoreRoutes();
+        $this->app->singleton(LoginResponse::class, fn () => new class implements LoginResponse
+        {
+            public function toResponse($request)
+            {
+                if ($request->user()?->must_change_password) {
+                    return redirect()->route('password.force-change');
+                }
+
+                return redirect()->intended(config('fortify.home'));
+            }
+        });
     }
 
     /**
@@ -45,40 +58,66 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::authenticateThrough(fn (Request $request) => array_filter([
             EnsureLoginIsNotThrottled::class,
             config('fortify.lowercase_usernames') ? CanonicalizeUsername::class : null,
-            Features::enabled(Features::twoFactorAuthentication()) ? RedirectsIfTwoFactorAuthenticatable::class : null,
             AttemptToAuthenticateWithSpanishMessages::class,
             PrepareAuthenticatedSession::class,
         ]));
         Fortify::authenticateUsing(function (Request $request) {
-            $user = User::where('email', $request->input(Fortify::username()))->first();
+            $email = strtolower((string) $request->input(Fortify::username()));
+            $user = User::where('email', $email)->first();
+
+            if ($user?->is_login_blocked) {
+                throw ValidationException::withMessages([
+                    Fortify::username() => ['Su cuenta fue bloqueada por intentos fallidos. Contacte a un administrador para desbloquearla.'],
+                ]);
+            }
 
             if ($user && $user->is_active && Hash::check((string) $request->input('password'), $user->password)) {
+                $user = DB::transaction(function () use ($user) {
+                    $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                    $locked->forceFill([
+                        'login_attempts' => 0,
+                        'is_login_blocked' => false,
+                        'session_version' => ((int) $locked->session_version) + 1,
+                    ])->save();
+
+                    return $locked;
+                });
+                $request->session()->put('auth_session_version', $user->session_version);
+                $request->session()->put('authenticated_session_started_at', now()->timestamp);
+                $request->session()->put('session_regenerated_at', now()->timestamp);
+                app(AuditLogger::class)->record('login.succeeded', ['email' => $email], $user, $request, 'success');
+
                 return $user;
             }
 
-            return null;
-        });
+            if ($user && $user->is_active) {
+                $attempts = min(3, ((int) $user->login_attempts) + 1);
+                $user->forceFill([
+                    'login_attempts' => $attempts,
+                    'is_login_blocked' => $attempts >= 3,
+                ])->save();
 
+                if ($attempts >= 3) {
+                    throw ValidationException::withMessages([
+                        Fortify::username() => ['Su cuenta fue bloqueada por intentos fallidos. Contacte a un administrador para desbloquearla.'],
+                    ]);
+                }
+
+                $remaining = 3 - $attempts;
+                $suffix = $remaining === 1 ? 'Le queda 1 intento antes del bloqueo.' : "Le quedan {$remaining} intentos antes del bloqueo.";
+                throw ValidationException::withMessages([
+                    Fortify::username() => ["Correo o contraseña incorrectos. {$suffix}"],
+                ]);
+            }
+
+            throw ValidationException::withMessages([
+                Fortify::username() => ['Correo o contraseña incorrectos.'],
+            ]);
+        });
         RateLimiter::for('login', function (Request $request) {
             $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
 
             return Limit::perMinute(5)->by($throttleKey);
-        });
-
-        RateLimiter::for('public-paz-salvo-validation', function (Request $request) {
-            return Limit::perMinute(10)->by($request->ip());
-        });
-
-        RateLimiter::for('public-certificate-qr', function (Request $request) {
-            return Limit::perMinute(60)->by($request->ip());
-        });
-
-        RateLimiter::for('public-certificate-pdf', function (Request $request) {
-            return Limit::perMinute(30)->by($request->ip());
-        });
-
-        RateLimiter::for('two-factor', function (Request $request) {
-            return Limit::perMinute(5)->by($request->session()->get('login.id'));
         });
 
     }

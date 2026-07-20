@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -19,6 +20,13 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        if (app()->environment('production') && ! (bool) env('ALLOW_PRODUCTION_USER_SEEDING', false)) {
+            $this->command?->warn('User seeding skipped in production. Use the audited user creation flow instead.');
+
+            return;
+        }
+
+        $temporaryPassword = (string) env('SEED_TEMPORARY_USER_PASSWORD', Str::password(24));
         $permissions = [
             'consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo',
             'anular paz y salvo', 'administrar usuarios', 'administrar agencias', 'administrar roles',
@@ -55,7 +63,8 @@ class DatabaseSeeder extends Seeder
                     [
                         'agency_id' => $agency->id,
                         'name' => str($email)->before('@')->headline()->toString(),
-                        'password' => Hash::make('aaud.123'),
+                        'password' => Hash::make($temporaryPassword),
+                        'password_changed_at' => now(),
                     ]
                 );
 
@@ -75,7 +84,8 @@ class DatabaseSeeder extends Seeder
             [
                 'agency_id' => $adminAgency?->id,
                 'name' => 'Admin AAUD',
-                'password' => Hash::make('aaud.123'),
+                'password' => Hash::make($temporaryPassword),
+                'password_changed_at' => now(),
                 'is_active' => true,
             ]
         );
@@ -89,7 +99,8 @@ class DatabaseSeeder extends Seeder
             [
                 'agency_id' => $adminAgency?->id,
                 'name' => 'Administrador General AAUD',
-                'password' => Hash::make('aaud.123'),
+                'password' => Hash::make($temporaryPassword),
+                'password_changed_at' => now(),
                 'is_active' => true,
             ]
         );

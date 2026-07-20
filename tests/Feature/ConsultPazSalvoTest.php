@@ -6,8 +6,11 @@ use App\Models\PazSalvo;
 use App\Models\User;
 use App\Services\PazSalvoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Tests\TestCase;
 
@@ -36,7 +39,7 @@ class ConsultPazSalvoTest extends TestCase
         ]);
     }
 
-    private function assertResult(\Illuminate\Testing\TestResponse $response, array $expected): void
+    private function assertResult(TestResponse $response, array $expected): void
     {
         $response->assertSessionHas('result.status', $expected['status']);
         $response->assertSessionHas('result.can_generate_paz_salvo', $expected['can_generate_paz_salvo']);
@@ -106,6 +109,53 @@ class ConsultPazSalvoTest extends TestCase
             ->assertSessionHas('result.client_number', '34787');
     }
 
+    #[DataProvider('invalidInvoiceNumbers')]
+    public function test_generation_rejects_invalid_invoice_numbers(string $invoiceNumber): void
+    {
+        $user = $this->authedUser();
+        $permission = Permission::firstOrCreate(['name' => 'generar paz y salvo', 'guard_name' => 'web']);
+        $user->givePermissionTo($permission);
+        $query = [
+            'query_token' => '00000000-0000-4000-8000-000000000001',
+            'status' => 'debt_free',
+            'client_number' => '34787',
+            'holder_name' => 'CLIENTE TEST',
+            'address' => 'CALLE 1',
+            'city' => 'BELISARIO FRIAS',
+            'rate' => 'Residencial',
+            'balances' => ['aseo_balance' => 0, 'energy_balance' => 0, 'total_balance' => 0],
+            'debts' => [],
+            'can_generate_paz_salvo' => true,
+            'requires_energy_warning' => false,
+        ];
+
+        $this->actingAs($user)
+            ->withSession([
+                'paz_salvo_query' => [
+                    'token' => $query['query_token'],
+                    'client_number' => '34787',
+                    'expires_at' => now()->addMinutes(15)->timestamp,
+                ],
+                'paz_salvo_result' => $query,
+            ])
+            ->post(route('paz-salvo.generate'), [
+                'query_token' => $query['query_token'],
+                'numero_factura' => $invoiceNumber,
+            ])
+            ->assertSessionHasErrors(['numero_factura']);
+    }
+
+    public static function invalidInvoiceNumbers(): array
+    {
+        return [
+            'five digits' => ['12345'],
+            'seven digits' => ['1234567'],
+            'letters' => ['12A456'],
+            'dash' => ['12-456'],
+            'space' => ['123 456'],
+        ];
+    }
+
     public function test_consult_page_does_not_revive_old_session_result_without_flash(): void
     {
         $user = $this->authedUser();
@@ -151,10 +201,10 @@ class ConsultPazSalvoTest extends TestCase
         $document = new PazSalvo(['id' => 123]);
         $document->exists = true;
 
-        $this->mock(PazSalvoService::class, function ($mock) use ($document, $user) {
+        $this->mock(PazSalvoService::class, function ($mock) use ($document, $user, $query) {
             $mock->shouldReceive('generate')
                 ->once()
-                ->with('34787', Mockery::on(fn (User $actual) => $actual->is($user)), '123456')
+                ->with('34787', Mockery::on(fn (User $actual) => $actual->is($user)), '123456', $query['query_token'])
                 ->andReturn($document);
         });
 
@@ -174,6 +224,50 @@ class ConsultPazSalvoTest extends TestCase
             ->assertRedirect(route('paz-salvos.show', $document))
             ->assertSessionMissing('paz_salvo_query')
             ->assertSessionMissing('paz_salvo_result');
+    }
+
+    public function test_successful_generation_preserves_invoice_number_with_leading_zeroes(): void
+    {
+        $user = $this->authedUser();
+        $permission = Permission::firstOrCreate(['name' => 'generar paz y salvo', 'guard_name' => 'web']);
+        $user->givePermissionTo($permission);
+        $query = [
+            'query_token' => '00000000-0000-4000-8000-000000000002',
+            'status' => 'debt_free',
+            'client_number' => '34787',
+            'holder_name' => 'CLIENTE TEST',
+            'address' => 'CALLE 1',
+            'city' => 'BELISARIO FRIAS',
+            'rate' => 'Residencial',
+            'balances' => ['aseo_balance' => 0, 'energy_balance' => 0, 'total_balance' => 0],
+            'debts' => [],
+            'can_generate_paz_salvo' => true,
+            'requires_energy_warning' => false,
+        ];
+        $document = new PazSalvo(['id' => 456, 'numero_factura' => '000123']);
+        $document->exists = true;
+
+        $this->mock(PazSalvoService::class, function ($mock) use ($document, $user, $query) {
+            $mock->shouldReceive('generate')
+                ->once()
+                ->with('34787', Mockery::on(fn (User $actual) => $actual->is($user)), '000123', $query['query_token'])
+                ->andReturn($document);
+        });
+
+        $this->actingAs($user)
+            ->withSession([
+                'paz_salvo_query' => [
+                    'token' => $query['query_token'],
+                    'client_number' => '34787',
+                    'expires_at' => now()->addMinutes(15)->timestamp,
+                ],
+                'paz_salvo_result' => $query,
+            ])
+            ->post(route('paz-salvo.generate'), [
+                'query_token' => $query['query_token'],
+                'numero_factura' => '000123',
+            ])
+            ->assertRedirect(route('paz-salvos.show', $document));
     }
 
     public function test_aseo_zero_energy_zero_allows_generation_without_warning(): void
@@ -288,7 +382,7 @@ class ConsultPazSalvoTest extends TestCase
     {
         Http::fake([
             'utilitygo.widergy.com/*' => function () {
-                throw new \Illuminate\Http\Client\ConnectionException('cURL error 28: Connection timed out');
+                throw new ConnectionException('cURL error 28: Connection timed out');
             },
         ]);
         $response = $this->actingAs($this->authedUser())->post(route('paz-salvo.consult'), ['client_number' => '34787']);

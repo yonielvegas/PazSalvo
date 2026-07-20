@@ -2,11 +2,11 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { Copy, Download, FileText } from 'lucide-react';
 import { AppLayout } from '@/components/app-layout';
 
-type Doc = { id:number; folio:string; numero_factura:string|null; verification_token:string; status:string; effective_status:string; client_number:string; holder_name:string; full_address:string; total_balance:string; issued_at:string; expires_at:string; agency_name:string; generated_by_name:string; authorized_by_name:string|null; cancelled_at:string|null; cancel_reason:string|null; cancelled_by?:{name:string}|null };
+type Doc = { id:number; folio:string; numero_factura:string|null; public_verification_url:string; status:string; effective_status:string; client_number:string; holder_name:string; full_address:string; total_balance:string; issued_at:string; expires_at:string; agency_name:string; generated_by_name:string; authorized_by_name:string|null; cancelled_at:string|null; cancel_reason:string|null; cancelled_by?:{name:string}|null };
 
 export default function Show({ document:d }: {document:Doc}) {
     const { flash } = usePage<{flash:{message?:string}}>().props;
-    const publicUrl = `${window.location.origin}/verificar/${d.verification_token}`;
+    const publicUrl = d.public_verification_url;
 
     return <AppLayout><Head title={d.folio} />
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-2 sm:px-6 lg:px-8">

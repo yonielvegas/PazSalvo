@@ -40,15 +40,11 @@ class InstitutionalAccessTest extends TestCase
     public function test_public_home_remains_public(): void
     {
         $this->get('/')
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page->component('public/home'));
+            ->assertRedirect(route('login'));
     }
 
-    public function test_public_home_links_to_institutional_access_bridge(): void
+    public function test_private_monolith_does_not_ship_public_home_component(): void
     {
-        $source = file_get_contents(resource_path('js/pages/public/home.tsx'));
-
-        $this->assertStringContainsString('href="/acceso-institucional"', $source);
-        $this->assertStringNotContainsString('href="/login"', $source);
+        $this->assertFileDoesNotExist(resource_path('js/pages/public/home.tsx'));
     }
 }

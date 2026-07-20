@@ -2,7 +2,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { AppLayout } from '@/components/app-layout';
 import { Modal } from '@/components/ui/modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Plus, Pencil, UserCheck, UserX, X, AlertTriangle, Image as ImageIcon, Eye, UnlockKeyhole, LogOut } from 'lucide-react';
+import { Plus, Pencil, UserCheck, UserX, X, AlertTriangle, Image as ImageIcon, Eye, UnlockKeyhole, LogOut, KeyRound, Copy, CheckCircle2 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 
 type User = {
@@ -17,6 +17,7 @@ type User = {
     has_any_general_admin_signature: boolean;
     login_attempts: number;
     is_login_blocked: boolean;
+    must_change_password: boolean;
     has_active_session: boolean;
     active_session_count: number;
     active_session_last_activity: number | null;
@@ -25,20 +26,20 @@ type Agency = { id: number; name: string };
 
 type PageErrors = Record<string, string>;
 
-const initialCreate = { name: '', email: '', agency_id: '', role: '', password: '', password_confirmation: '', is_active: true };
+const initialCreate = { name: '', email: '', agency_id: '', role: '', is_active: true };
 
-export default function UsersIndex({ users, agencies, roles }: { users: User[]; agencies: Agency[]; roles: string[] }) {
-    const { flash, errors: pageErrors } = usePage<{ flash: { message?: string }; errors: PageErrors & { needs_general_admin_replace_confirmation?: string; current_general_admin_name?: string; activation_replace?: string } }>().props;
+export default function UsersIndex({ users, agencies, roles, temporary_password }: { users: User[]; agencies: Agency[]; roles: string[]; temporary_password: string }) {
+    const { flash } = usePage<{ flash: { message?: string }; errors: PageErrors & { needs_general_admin_replace_confirmation?: string; current_general_admin_name?: string; activation_replace?: string } }>().props;
 
     const [showCreate, setShowCreate] = useState(false);
     const [editUser, setEditUser] = useState<User | null>(null);
     const [toggleUser, setToggleUser] = useState<User | null>(null);
     const [createForm, setCreateForm] = useState(initialCreate);
-    const [editForm, setEditForm] = useState({ name: '', email: '', agency_id: '', role: '', password: '', password_confirmation: '', is_active: true });
+    const [editForm, setEditForm] = useState({ name: '', email: '', agency_id: '', role: '', is_active: true });
     const [createErrors, setCreateErrors] = useState<PageErrors>({});
     const [editErrors, setEditErrors] = useState<PageErrors>({});
     const [toggleErrors, setToggleErrors] = useState<PageErrors>({});
-    const [processing, setProcessing] = useState<'create' | 'edit' | 'toggle' | 'toggle-replace' | 'toggle-general-admin-replace' | 'unlock-login' | 'release-session' | null>(null);
+    const [processing, setProcessing] = useState<'create' | 'edit' | 'toggle' | 'toggle-replace' | 'toggle-general-admin-replace' | 'unlock-login' | 'release-session' | 'reset-password' | null>(null);
     const [dismissed, setDismissed] = useState(false);
     const [createNeedsGeneralAdminReplaceConfirm, setCreateNeedsGeneralAdminReplaceConfirm] = useState(false);
     const [editNeedsGeneralAdminReplaceConfirm, setEditNeedsGeneralAdminReplaceConfirm] = useState(false);
@@ -51,6 +52,9 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
     const [signaturePreviewUser, setSignaturePreviewUser] = useState<User | null>(null);
     const [toggleReplaceUser, setToggleReplaceUser] = useState<User | null>(null);
     const [toggleReplaceName, setToggleReplaceName] = useState('');
+    const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+    const [resetPasswordComplete, setResetPasswordComplete] = useState(false);
+    const [temporaryPasswordCopied, setTemporaryPasswordCopied] = useState(false);
 
     const isGeneralAdminRole = (role: string) => role === 'administrador_general';
     const canViewSignature = (u: User) => u.roles.includes('administrador_general') || u.has_any_general_admin_signature;
@@ -72,8 +76,6 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
             email: user.email,
             agency_id: String(user.agency_id),
             role: user.roles[0] || '',
-            password: '',
-            password_confirmation: '',
             is_active: user.is_active,
         });
         setEditErrors({});
@@ -106,8 +108,6 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
         formData.append('email', createForm.email);
         formData.append('agency_id', String(Number(createForm.agency_id)));
         formData.append('role', createForm.role);
-        formData.append('password', createForm.password);
-        formData.append('password_confirmation', createForm.password_confirmation);
         formData.append('is_active', createForm.is_active ? '1' : '0');
         if (createGeneralAdminSignatureFile) formData.append('general_admin_signature', createGeneralAdminSignatureFile);
         if (createNeedsGeneralAdminReplaceConfirm) formData.append('confirm_replace', '1');
@@ -144,10 +144,6 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
         formData.append('agency_id', String(Number(editForm.agency_id)));
         formData.append('role', editForm.role);
         formData.append('is_active', editForm.is_active ? '1' : '0');
-        if (editForm.password) {
-            formData.append('password', editForm.password);
-            formData.append('password_confirmation', editForm.password_confirmation);
-        }
         if (editGeneralAdminSignatureFile) formData.append('general_admin_signature', editGeneralAdminSignatureFile);
         if (editNeedsGeneralAdminReplaceConfirm) formData.append('confirm_replace', '1');
         formData.append('_method', 'PUT');
@@ -243,6 +239,35 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
         });
     }, []);
 
+    const openResetPassword = useCallback((user: User) => {
+        setResetPasswordUser(user);
+        setResetPasswordComplete(false);
+        setTemporaryPasswordCopied(false);
+    }, []);
+
+    const handleResetPassword = useCallback(() => {
+        if (!resetPasswordUser || processing === 'reset-password') return;
+
+        setProcessing('reset-password');
+        router.patch(`/admin/users/${resetPasswordUser.id}/reset-password`, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setResetPasswordComplete(true);
+                setDismissed(false);
+            },
+            onFinish: () => setProcessing(null),
+        });
+    }, [resetPasswordUser, processing]);
+
+    const copyTemporaryPassword = useCallback(async () => {
+        if (!temporary_password) return;
+
+        await navigator.clipboard.writeText(temporary_password);
+        setTemporaryPasswordCopied(true);
+        window.setTimeout(() => setTemporaryPasswordCopied(false), 1800);
+    }, [temporary_password]);
+
     const showFlash = flash?.message && !dismissed;
 
     return (
@@ -319,6 +344,11 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                                                     Sesión activa{u.active_session_count > 1 ? ` · ${u.active_session_count}` : ''}
                                                 </span>
                                             )}
+                                            {u.must_change_password && (
+                                                <span className="user-state-badge must-change-password">
+                                                    Cambio obligatorio
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td>
@@ -333,6 +363,16 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                                             <span className="tooltip" data-tip="Editar usuario">
                                                 <button className="icon-btn" onClick={() => openEdit(u)} aria-label="Editar usuario">
                                                     <Pencil size={15} />
+                                                </button>
+                                            </span>
+                                            <span className="tooltip" data-tip="Restablecer contraseña">
+                                                <button
+                                                    className="icon-btn icon-btn-warning"
+                                                    onClick={() => openResetPassword(u)}
+                                                    aria-label="Restablecer contraseña"
+                                                    disabled={processing === 'reset-password'}
+                                                >
+                                                    <KeyRound size={15} />
                                                 </button>
                                             </span>
                                             <span className="tooltip" data-tip={u.is_login_blocked || u.login_attempts > 0 ? 'Desbloquear login' : 'Sin bloqueo de login'}>
@@ -377,7 +417,7 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 open={showCreate}
                 onClose={() => { if (processing !== 'create') setShowCreate(false); }}
                 title="Nuevo usuario"
-                description="Complete la informacion del usuario y asigne su agencia y rol."
+                description="Complete la informacion del usuario y asigne su agencia y rol. Iniciará con contraseña temporal y cambio obligatorio."
             >
                 <form onSubmit={handleCreate} className="modal-form">
                     {createNeedsGeneralAdminReplaceConfirm && (
@@ -421,15 +461,11 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                             {createErrors.role && <p className="field-error">{createErrors.role}</p>}
                         </div>
                     </div>
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="create-password">Contrasena</label>
-                            <input id="create-password" type="password" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} required />
-                            {createErrors.password && <p className="field-error">{createErrors.password}</p>}
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="create-password-confirm">Confirmar contrasena</label>
-                            <input id="create-password-confirm" type="password" value={createForm.password_confirmation} onChange={(e) => setCreateForm({ ...createForm, password_confirmation: e.target.value })} required />
+                    <div className="temporary-password-note" role="note">
+                        <KeyRound size={18} />
+                        <div>
+                            <strong>Contraseña temporal: {temporary_password}</strong>
+                            <span>El usuario deberá crear una contraseña personal en su primer inicio de sesión.</span>
                         </div>
                     </div>
                     <div className="form-group" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -517,15 +553,11 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                             {editErrors.role && <p className="field-error">{editErrors.role}</p>}
                         </div>
                     </div>
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label htmlFor="edit-password">Nueva contrasena <small style={{ fontWeight: 400, color: '#71817e' }}>(opcional)</small></label>
-                            <input id="edit-password" type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />
-                            {editErrors.password && <p className="field-error">{editErrors.password}</p>}
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="edit-password-confirm">Confirmar contrasena</label>
-                            <input id="edit-password-confirm" type="password" value={editForm.password_confirmation} onChange={(e) => setEditForm({ ...editForm, password_confirmation: e.target.value })} />
+                    <div className="temporary-password-note" role="note">
+                        <KeyRound size={18} />
+                        <div>
+                            <strong>El cambio de contraseña se realiza con Restablecer contraseña.</strong>
+                            <span>La edición de usuario conserva identidad, agencia, rol, estado y firma.</span>
                         </div>
                     </div>
                     <div className="form-group" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -605,6 +637,47 @@ export default function UsersIndex({ users, agencies, roles }: { users: User[]; 
                 confirmLabel="Sí, reemplazar"
                 processing={processing === 'toggle-replace'}
             />
+
+            <Modal
+                open={resetPasswordUser !== null}
+                onClose={() => { if (processing !== 'reset-password') setResetPasswordUser(null); }}
+                title="Restablecer contraseña"
+                description={resetPasswordUser ? resetPasswordUser.email : ''}
+            >
+                {!resetPasswordComplete ? (
+                    <div className="confirm-body">
+                        <div className="confirm-icon"><KeyRound /></div>
+                        <p className="confirm-message">
+                            Se desbloqueará la cuenta, se cerrarán sus sesiones activas y su contraseña será restablecida temporalmente. El usuario deberá crear una nueva contraseña al iniciar sesión.
+                        </p>
+                        <div className="temporary-password-box">
+                            <span>Contraseña temporal</span>
+                            <strong>{temporary_password}</strong>
+                        </div>
+                        <p className="field-help">Entrega esta información únicamente al usuario correspondiente.</p>
+                        <div className="modal-footer">
+                            <button type="button" className="btn-secondary" onClick={() => setResetPasswordUser(null)} disabled={processing === 'reset-password'}>Cancelar</button>
+                            <button type="button" onClick={handleResetPassword} disabled={processing === 'reset-password'}>
+                                {processing === 'reset-password' ? <span className="button-spinner" aria-hidden="true" /> : <KeyRound size={16} />}
+                                {processing === 'reset-password' ? 'Restableciendo…' : 'Confirmar restablecimiento'}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="confirm-body">
+                        <div className="success-icon"><CheckCircle2 /></div>
+                        <h3>Contraseña restablecida correctamente</h3>
+                        <p className="confirm-message">El usuario podrá iniciar sesión con la contraseña temporal {temporary_password} y deberá cambiarla inmediatamente.</p>
+                        <div className="modal-footer">
+                            <button type="button" className="btn-secondary" onClick={copyTemporaryPassword}>
+                                <Copy size={16} />
+                                {temporaryPasswordCopied ? 'Copiada' : 'Copiar contraseña temporal'}
+                            </button>
+                            <button type="button" onClick={() => setResetPasswordUser(null)}>Cerrar</button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             <Modal
                 open={signaturePreviewUser !== null}

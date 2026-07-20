@@ -3,7 +3,9 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use App\Services\AuditLogger;
 use Illuminate\Contracts\Auth\StatefulGuard;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Fortify;
@@ -26,11 +28,23 @@ class AttemptToAuthenticateWithSpanishMessages
         }
 
         if ($user && $user->is_active && Hash::check((string) $request->input('password'), $user->password)) {
-            if ($user->login_attempts !== 0) {
-                $user->forceFill(['login_attempts' => 0])->save();
-            }
+            $user = DB::transaction(function () use ($user) {
+                $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $locked->forceFill([
+                    'login_attempts' => 0,
+                    'is_login_blocked' => false,
+                    'session_version' => ((int) $locked->session_version) + 1,
+                ])->save();
+
+                return $locked;
+            });
 
             $this->guard->login($user, $request->boolean('remember'));
+            $request->session()->put('auth_session_version', $user->session_version);
+            $request->session()->put('authenticated_session_started_at', now()->timestamp);
+            $request->session()->put('session_regenerated_at', now()->timestamp);
+            $request->session()->regenerateToken();
+            app(AuditLogger::class)->record('login.succeeded', ['email' => $email], $user, $request, 'success');
 
             return $next($request);
         }
@@ -44,6 +58,7 @@ class AttemptToAuthenticateWithSpanishMessages
             ])->save();
 
             if ($isBlocked) {
+                app(AuditLogger::class)->record('login.failed', ['email' => $email, 'blocked' => true], $user, $request, 'blocked');
                 $this->throwBlocked();
             }
 
@@ -56,6 +71,7 @@ class AttemptToAuthenticateWithSpanishMessages
         }
 
         $this->limiter->increment($request);
+        app(AuditLogger::class)->record('login.failed', ['email' => $email], $user, $request, 'failed');
 
         throw ValidationException::withMessages([
             Fortify::username() => ['Correo o contraseña incorrectos.'],

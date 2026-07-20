@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\PdfConversionException;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\Process\Process;
@@ -40,6 +41,10 @@ class PdfConversionService
             ]);
 
             throw new PdfConversionException('No se pudo convertir el documento a PDF.', previous: $exception);
+        } finally {
+            if (isset($profile) && is_dir($profile)) {
+                File::deleteDirectory($profile);
+            }
         }
     }
 }

@@ -4,6 +4,8 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\IpUtils;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureInternalNetwork
@@ -16,12 +18,21 @@ class EnsureInternalNetwork
 
         $clientIp = $request->ip();
         $allowedRanges = config('security.internal_network.allowed_ips', []);
+        if ($allowedRanges === [] && app()->environment('production')) {
+            Log::critical('Internal network restriction enabled without allowed CIDRs.');
+            abort(503, 'Acceso institucional no configurado.');
+        }
 
         foreach ($allowedRanges as $range) {
             if ($this->matches($clientIp, $range)) {
                 return $next($request);
             }
         }
+
+        Log::warning('Institutional network access rejected.', [
+            'ip' => $clientIp,
+            'path' => $request->path(),
+        ]);
 
         abort(403, 'Acceso restringido a la red institucional.');
     }
@@ -32,25 +43,6 @@ class EnsureInternalNetwork
             return false;
         }
 
-        if (! str_contains($range, '/')) {
-            return $ip === $range;
-        }
-
-        [$subnet, $bits] = explode('/', $range, 2);
-        $ipLong = ip2long($ip);
-        $subnetLong = ip2long($subnet);
-
-        if ($ipLong === false || $subnetLong === false || ! is_numeric($bits)) {
-            return false;
-        }
-
-        $bits = (int) $bits;
-        if ($bits < 0 || $bits > 32) {
-            return false;
-        }
-
-        $mask = $bits === 0 ? 0 : (-1 << (32 - $bits));
-
-        return ($ipLong & $mask) === ($subnetLong & $mask);
+        return IpUtils::checkIp($ip, $range);
     }
 }

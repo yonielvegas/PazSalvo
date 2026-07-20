@@ -211,8 +211,8 @@ class PazSalvoExcelService
 
         $text = 'SELLO';
         $font = 5;
-        $tx = (int)(($size - strlen($text) * imagefontwidth($font)) / 2);
-        $ty = (int)(($size - imagefontheight($font)) / 2);
+        $tx = (int) (($size - strlen($text) * imagefontwidth($font)) / 2);
+        $ty = (int) (($size - imagefontheight($font)) / 2);
         imagestring($img, $font, $tx, $ty, $text, $black);
 
         imagepng($img, $path);
@@ -234,6 +234,7 @@ class PazSalvoExcelService
             $tmp = tempnam(sys_get_temp_dir(), 'logo_bw_').'.png';
             imagepng($srcImg, $tmp);
             imagedestroy($srcImg);
+
             return $tmp;
         } catch (\Throwable $e) {
             return null;

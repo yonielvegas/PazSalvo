@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Agency;
 use App\Models\PazSalvo;
-use App\Models\User;
+use App\Services\AuditLogger;
+use App\Services\PublicVerificationUrlBuilder;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,18 +18,28 @@ class PazSalvoHistoryController extends Controller
 {
     public function index(Request $request): Response
     {
+        Gate::authorize('viewAny', PazSalvo::class);
         $filters = $request->validate([
-            'search' => ['nullable', 'string', 'max:255'], 'agency_id' => ['nullable', 'integer'],
-            'generated_by' => ['nullable', 'integer'], 'status' => ['nullable', Rule::in(['generated', 'cancelled', 'error'])],
-            'from' => ['nullable', 'date'], 'to' => ['nullable', 'date'],
+            'folio' => ['nullable', 'string', 'max:30'],
+            'nac' => ['nullable', 'string', 'regex:/^\d+$/', 'max:30'],
+            'numero_factura' => ['nullable', 'string', 'regex:/^\d{1,6}$/'],
+            'titular' => ['nullable', 'string', 'max:150'],
+            'fecha_desde' => ['nullable', 'date_format:Y-m-d'],
+            'fecha_hasta' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:fecha_desde'],
         ]);
+        $filters = $this->normalizeFilters($filters);
+
         $documents = PazSalvo::query()->with(['client:id,client_number,holder_name,district,corregimiento,city,address', 'generatedBy:id,name', 'agency:id,name'])
-            ->when($filters['search'] ?? null, fn ($q, $v) => $q->where(fn ($q) => $q->where('folio', 'ilike', "%{$v}%")->orWhereHas('client', fn ($q) => $q->where('client_number', 'ilike', "%{$v}%")->orWhere('holder_name', 'ilike', "%{$v}%"))))
-            ->when($filters['agency_id'] ?? null, fn ($q, $v) => $q->where('agency_id', $v))
-            ->when($filters['generated_by'] ?? null, fn ($q, $v) => $q->where('generated_by', $v))
-            ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
-            ->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate('issued_at', '>=', $v))
-            ->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate('issued_at', '<=', $v))
+            ->when($filters['folio'] ?? null, fn (Builder $q, string $v) => $q->where('folio', 'ilike', $this->like($v)))
+            ->when($filters['nac'] ?? null, fn (Builder $q, string $v) => $q->whereHas('client', fn (Builder $q) => $q->where('client_number', $v)))
+            ->when($filters['numero_factura'] ?? null, function (Builder $q, string $v): void {
+                $v = strlen($v) === 6 ? $v : $this->like($v);
+                $operator = strlen($v) === 6 ? '=' : 'ilike';
+                $q->where('numero_factura', $operator, $v);
+            })
+            ->when($filters['titular'] ?? null, fn (Builder $q, string $v) => $q->whereHas('client', fn (Builder $q) => $q->where('holder_name', 'ilike', $this->like($v))))
+            ->when($filters['fecha_desde'] ?? null, fn (Builder $q, string $v) => $q->where('issued_at', '>=', Carbon::createFromFormat('Y-m-d', $v, 'America/Panama')->startOfDay()->utc()))
+            ->when($filters['fecha_hasta'] ?? null, fn (Builder $q, string $v) => $q->where('issued_at', '<', Carbon::createFromFormat('Y-m-d', $v, 'America/Panama')->addDay()->startOfDay()->utc()))
             ->latest('issued_at')->paginate(15)->withQueryString()->through(function (PazSalvo $document) {
                 return [
                     'id' => $document->id,
@@ -45,18 +58,49 @@ class PazSalvoHistoryController extends Controller
 
         return Inertia::render('paz-salvo/history', [
             'documents' => $documents, 'filters' => $filters,
-            'agencies' => Agency::orderBy('name')->get(['id', 'name']), 'users' => User::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
-    public function show(PazSalvo $pazSalvo): Response
+    private function normalizeFilters(array $filters): array
     {
+        foreach (['folio', 'nac', 'numero_factura', 'titular'] as $key) {
+            if (! array_key_exists($key, $filters)) {
+                continue;
+            }
+
+            $filters[$key] = preg_replace('/\s+/', ' ', trim((string) $filters[$key]));
+            if ($filters[$key] === '') {
+                unset($filters[$key]);
+            }
+        }
+
+        if (isset($filters['folio'])) {
+            $filters['folio'] = mb_strtoupper($filters['folio']);
+        }
+
+        foreach (['fecha_desde', 'fecha_hasta'] as $key) {
+            if (($filters[$key] ?? null) === '' || ($filters[$key] ?? null) === null) {
+                unset($filters[$key]);
+            }
+        }
+
+        return $filters;
+    }
+
+    private function like(string $value): string
+    {
+        return '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value).'%';
+    }
+
+    public function show(PazSalvo $pazSalvo, PublicVerificationUrlBuilder $urlBuilder): Response
+    {
+        Gate::authorize('view', $pazSalvo);
         $pazSalvo->load(['client', 'generatedBy:id,name', 'agency:id,name', 'generalAdminSignature.user:id,name', 'cancelledBy:id,name']);
         $document = [
             'id' => $pazSalvo->id,
             'folio' => $pazSalvo->folio,
             'numero_factura' => $pazSalvo->numero_factura,
-            'verification_token' => $pazSalvo->verification_token,
+            'public_verification_url' => $urlBuilder->build($pazSalvo->verification_token),
             'status' => $pazSalvo->status,
             'effective_status' => $pazSalvo->publicStatus(),
             'client_number' => $pazSalvo->client->client_number,
@@ -78,14 +122,26 @@ class PazSalvoHistoryController extends Controller
 
     public function cancel(Request $request, PazSalvo $pazSalvo): RedirectResponse
     {
+        Gate::authorize('cancel', $pazSalvo);
         $data = $request->validate(['cancel_reason' => ['required', 'string', 'min:5', 'max:2000']]);
-        $updated = PazSalvo::whereKey($pazSalvo->id)->where('status', PazSalvo::GENERATED)->update([
-            'status' => PazSalvo::CANCELLED, 'cancelled_at' => now(), 'cancelled_by' => $request->user()->id,
-            'cancel_reason' => $data['cancel_reason'], 'updated_at' => now(),
-        ]);
+        $updated = DB::transaction(function () use ($pazSalvo, $request, $data) {
+            $document = PazSalvo::whereKey($pazSalvo->id)->lockForUpdate()->firstOrFail();
+            if ($document->status !== PazSalvo::GENERATED) {
+                return false;
+            }
+
+            return $document->update([
+                'status' => PazSalvo::CANCELLED, 'cancelled_at' => now(), 'cancelled_by' => $request->user()->id,
+                'cancel_reason' => $data['cancel_reason'], 'updated_at' => now(),
+            ]);
+        });
         if (! $updated) {
             return back()->withErrors(['cancel_reason' => 'Este certificado no puede anularse o ya fue anulado.']);
         }
+        app(AuditLogger::class)->record('paz_salvo.cancelled', [
+            'folio' => $pazSalvo->folio,
+            'reason' => $data['cancel_reason'],
+        ], $pazSalvo, $request, 'success');
 
         return back()->with('message', 'Certificado anulado correctamente.');
     }

@@ -3,7 +3,6 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Models\GeneralAdminSignature;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,6 +28,10 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'is_login_blocked' => 'boolean',
             'login_attempts' => 'integer',
+            'session_version' => 'integer',
+            'password_changed_at' => 'datetime',
+            'must_change_password' => 'boolean',
+            'password_reset_at' => 'datetime',
             'password' => 'hashed',
         ];
     }
@@ -61,5 +64,10 @@ class User extends Authenticatable
     public function activeGeneralAdminSignature(): HasOne
     {
         return $this->hasOne(GeneralAdminSignature::class)->where('is_active', true);
+    }
+
+    public function passwordResetBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'password_reset_by');
     }
 }

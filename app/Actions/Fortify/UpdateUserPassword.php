@@ -3,6 +3,7 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use App\Services\AuditLogger;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,11 @@ class UpdateUserPassword implements UpdatesUserPasswords
 
         $user->forceFill([
             'password' => Hash::make($input['password']),
+            'password_changed_at' => now(),
+            'session_version' => ((int) $user->session_version) + 1,
         ])->save();
+
+        session()->put('auth_session_version', $user->session_version);
+        app(AuditLogger::class)->record('password.changed', [], $user, request(), 'success');
     }
 }

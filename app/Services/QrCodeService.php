@@ -13,7 +13,7 @@ class QrCodeService
 {
     public function generate(string $url, string $folio): string
     {
-        $path = trim(config('paz-salvo.output_dir'), '/').'/'.now()->format('Y/m').'/qr_'.$folio.'.png';
+        $path = trim(config('paz-salvo.output_dir'), '/').'/'.now()->format('Y/m').'/qr_'.$folio.'_'.bin2hex(random_bytes(6)).'.png';
         $disk = Storage::disk(config('paz-salvo.disk'));
         $disk->makeDirectory(dirname($path));
 

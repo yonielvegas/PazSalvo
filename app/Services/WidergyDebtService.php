@@ -50,6 +50,7 @@ class WidergyDebtService
 
     private function requestJob(string $clientNumber): array
     {
+        $this->validateConfiguredUrl(config('widergy.complete_debts_url'));
         try {
             $response = $this->client()->get(config('widergy.complete_debts_url'), ['client_number' => $clientNumber]);
         } catch (\Throwable $e) {
@@ -93,6 +94,7 @@ class WidergyDebtService
     private function fetchJobResult(string $jobId, ?string $url): array
     {
         $endpoint = config('widergy.job_base_url');
+        $this->validateConfiguredUrl($endpoint);
         for ($attempt = 1; $attempt <= config('widergy.poll_attempts'); $attempt++) {
             try {
                 $response = $this->client()->get($endpoint, ['id' => $jobId]);
@@ -148,6 +150,26 @@ class WidergyDebtService
             'ENSA está caído o no responde en este momento. Intente nuevamente más tarde.',
             ['stage' => 'timeout', 'job_id' => $jobId, 'url' => $url],
         );
+    }
+
+    private function validateConfiguredUrl(string $url): void
+    {
+        $parts = parse_url($url);
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $allowedHosts = array_map('strtolower', config('widergy.allowed_hosts', []));
+
+        if ($scheme !== 'https' || $host === '' || ! in_array($host, $allowedHosts, true)) {
+            Log::error('Configuración insegura para la integración Widergy.', [
+                'host' => $host ?: '[missing]',
+                'scheme' => $scheme ?: '[missing]',
+            ]);
+
+            throw new WidergyException(
+                'No se pudo completar la consulta. Intente nuevamente o contacte al administrador.',
+                ['stage' => 'configuration'],
+            );
+        }
     }
 
     private function extractResult(array $payload): array

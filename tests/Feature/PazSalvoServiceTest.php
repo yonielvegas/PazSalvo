@@ -190,16 +190,19 @@ class PazSalvoServiceTest extends TestCase
         $qr = Mockery::mock(QrCodeService::class);
         $qr->shouldReceive('generate')->once()->andReturnUsing(function () {
             Storage::disk('local')->put('generated/temporary-qr.png', 'qr');
+
             return 'generated/temporary-qr.png';
         });
         $excel = Mockery::mock(PazSalvoExcelService::class);
         $excel->shouldReceive('generate')->once()->andReturnUsing(function () {
             Storage::disk('local')->put('generated/temporary.xlsx', 'xlsx');
+
             return 'generated/temporary.xlsx';
         });
         $pdf = Mockery::mock(PdfConversionService::class);
         $pdf->shouldReceive('convertXlsxToPdf')->once()->andReturnUsing(function () {
             Storage::disk('local')->put('generated/certificate.pdf', str_repeat('%PDF', 30));
+
             return 'generated/certificate.pdf';
         });
         $document = (new PazSalvoService($widergy, app(SanMiguelitoLocationService::class), $lookup, app(CertificateNumberService::class), $qr, $excel, $pdf))->generate('34787', $user, '123456');
@@ -221,16 +224,19 @@ class PazSalvoServiceTest extends TestCase
         $qr = Mockery::mock(QrCodeService::class);
         $qr->shouldReceive('generate')->once()->andReturnUsing(function () {
             Storage::disk('local')->put('generated/temporary-qr.png', 'qr');
+
             return 'generated/temporary-qr.png';
         });
         $excel = Mockery::mock(PazSalvoExcelService::class);
         $excel->shouldReceive('generate')->once()->andReturnUsing(function () {
             Storage::disk('local')->put('generated/temporary.xlsx', 'xlsx');
+
             return 'generated/temporary.xlsx';
         });
         $pdf = Mockery::mock(PdfConversionService::class);
         $pdf->shouldReceive('convertXlsxToPdf')->once()->andReturnUsing(function () {
             Storage::disk('local')->put('generated/certificate.pdf', str_repeat('%PDF', 30));
+
             return 'generated/certificate.pdf';
         });
         $document = (new PazSalvoService($widergy, app(SanMiguelitoLocationService::class), $lookup, app(CertificateNumberService::class), $qr, $excel, $pdf))->generate('34787', $user, '123456');

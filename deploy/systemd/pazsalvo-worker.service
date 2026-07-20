@@ -1,0 +1,14 @@
+[Unit]
+Description=Paz y Salvo AAUD Laravel queue worker
+After=network.target
+
+[Service]
+User=pazsalvo
+Group=pazsalvo
+WorkingDirectory=/var/www/PazSalvo/current
+ExecStart=/usr/bin/php artisan queue:work database --sleep=3 --tries=3 --timeout=120 --max-time=3600
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

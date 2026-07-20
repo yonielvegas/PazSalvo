@@ -26,5 +26,4 @@ class Agency extends Model
     {
         return $this->hasMany(PazSalvo::class);
     }
-
 }

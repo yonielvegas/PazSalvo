@@ -12,6 +12,7 @@ use App\Services\PazSalvoService;
 use App\Services\SanMiguelitoLocationService;
 use App\Services\WidergyDebtService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -115,12 +116,13 @@ class PazSalvoController extends Controller
 
     public function generate(GeneratePazSalvoRequest $request, PazSalvoService $service): RedirectResponse
     {
+        Gate::authorize('generate', PazSalvo::class);
         $query = $request->session()->get('paz_salvo_query');
         if (! is_array($query) || ! hash_equals((string) ($query['token'] ?? ''), $request->validated('query_token')) || now()->timestamp > ($query['expires_at'] ?? 0)) {
             return $this->backToGenerationResult($request, ['generation' => 'La consulta expiró o no corresponde a esta sesión. Consulte nuevamente.']);
         }
         try {
-            $document = $service->generate($query['client_number'], $request->user(), $request->validated('numero_factura'));
+            $document = $service->generate($query['client_number'], $request->user(), $request->validated('numero_factura'), $request->validated('query_token'));
         } catch (WidergyException|ExcelLookupException|PdfConversionException|ValidationException $e) {
             if ($e instanceof ValidationException) {
                 return $this->backToGenerationResult($request, $e->errors());
@@ -139,11 +141,15 @@ class PazSalvoController extends Controller
 
     public function showPdf(PazSalvo $pazSalvo): BinaryFileResponse
     {
+        Gate::authorize('download', $pazSalvo);
+
         return response()->file($this->pdfPath($pazSalvo), ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="'.$pazSalvo->folio.'.pdf"']);
     }
 
     public function downloadPdf(PazSalvo $pazSalvo): BinaryFileResponse
     {
+        Gate::authorize('download', $pazSalvo);
+
         return response()->download($this->pdfPath($pazSalvo), $pazSalvo->folio.'.pdf', ['Content-Type' => 'application/pdf']);
     }
 

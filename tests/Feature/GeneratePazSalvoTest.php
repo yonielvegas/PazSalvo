@@ -13,36 +13,33 @@ class GeneratePazSalvoTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_public_verification_finds_generated_certificate(): void
+    public function test_private_root_redirects_to_login_for_guests(): void
+    {
+        $this->get('/')->assertRedirect(route('login'));
+    }
+
+    public function test_private_root_redirects_authenticated_user_to_consultation(): void
+    {
+        $user = User::factory()->create();
+        Permission::create(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
+        $user->givePermissionTo('consultar paz y salvo');
+
+        $this->actingAs($user)
+            ->withSession(['auth_session_version' => $user->session_version, 'authenticated_session_started_at' => now()->timestamp, 'session_regenerated_at' => now()->timestamp])
+            ->get('/')
+            ->assertRedirect(route('paz-salvo.index'));
+    }
+
+    public function test_legacy_public_verification_routes_are_not_registered_in_private_monolith(): void
     {
         $document = PazSalvo::factory()->create();
-        $this->get(route('public.certificates.verify', $document->verification_token))
-            ->assertOk()->assertInertia(fn ($page) => $page->component('public/verify')->where('certificate.folio', $document->folio)->where('certificate.status', 'valid'));
+
+        $this->get('/validar-paz-salvo')->assertNotFound();
+        $this->get('/verificar/'.$document->verification_token)->assertNotFound();
+        $this->get('/verificar/'.$document->verification_token.'/pdf')->assertNotFound();
     }
 
-    public function test_cancelled_public_pdf_is_forbidden_and_file_is_preserved(): void
-    {
-        Storage::fake('local');
-        Storage::disk('local')->put('generated/test.pdf', '%PDF-test');
-        $document = PazSalvo::factory()->create(['status' => PazSalvo::CANCELLED, 'pdf_path' => 'generated/test.pdf', 'cancelled_at' => now(), 'cancel_reason' => 'Corrección administrativa']);
-        $this->get(route('public.certificates.pdf', $document->verification_token))->assertForbidden();
-        Storage::disk('local')->assertExists('generated/test.pdf');
-    }
-
-    public function test_unknown_public_token_shows_not_found_state(): void
-    {
-        $this->get(route('public.certificates.verify', '00000000-0000-4000-8000-000000000000'))
-            ->assertOk()->assertInertia(fn ($page) => $page->where('certificate', null));
-    }
-
-    public function test_malformed_public_token_does_not_reach_uuid_query(): void
-    {
-        $this->get(route('public.certificates.verify', 'token-invalido'))
-            ->assertOk()->assertInertia(fn ($page) => $page->where('certificate', null));
-        $this->get(route('public.certificates.pdf', 'token-invalido'))->assertNotFound();
-    }
-
-    public function test_authorized_user_can_cancel_once_and_public_pdf_is_blocked(): void
+    public function test_authorized_user_can_cancel_once_and_file_is_preserved(): void
     {
         Storage::fake('local');
         Storage::disk('local')->put('generated/certificate.pdf', '%PDF-test');
@@ -51,48 +48,19 @@ class GeneratePazSalvoTest extends TestCase
         $user->givePermissionTo($permission);
         $document = PazSalvo::factory()->create(['pdf_path' => 'generated/certificate.pdf']);
 
-        $this->actingAs($user)->patch(route('paz-salvos.cancel', $document), ['cancel_reason' => 'Corrección administrativa requerida'])
-            ->assertRedirect()->assertSessionHas('message');
+        $this->actingAs($user)
+            ->withSession(['auth_session_version' => $user->session_version, 'authenticated_session_started_at' => now()->timestamp, 'session_regenerated_at' => now()->timestamp])
+            ->patch(route('paz-salvos.cancel', $document), ['cancel_reason' => 'Corrección administrativa requerida'])
+            ->assertRedirect()
+            ->assertSessionHas('message');
+
         $this->assertDatabaseHas('paz_salvos', ['id' => $document->id, 'status' => PazSalvo::CANCELLED, 'cancelled_by' => $user->id]);
+        $this->assertDatabaseHas('audit_logs', ['event' => 'paz_salvo.cancelled', 'subject_id' => $document->id]);
         Storage::disk('local')->assertExists('generated/certificate.pdf');
-        $this->get(route('public.certificates.pdf', $document->verification_token))->assertForbidden();
-        $this->actingAs($user)->patch(route('paz-salvos.cancel', $document), ['cancel_reason' => 'Segundo intento inválido'])->assertSessionHasErrors('cancel_reason');
-    }
 
-    public function test_expired_certificate_shows_expired_status_and_no_pdf_button(): void
-    {
-        $document = PazSalvo::factory()->create(['expires_at' => now()->subDay()]);
-        $this->get(route('public.certificates.verify', $document->verification_token))
-            ->assertOk()
-            ->assertInertia(fn ($page) => $page
-                ->component('public/verify')
-                ->where('certificate.folio', $document->folio)
-                ->where('certificate.status', 'expired')
-                ->where('certificate.pdf_url', null)
-            );
-    }
-
-    public function test_expired_certificate_pdf_is_forbidden(): void
-    {
-        Storage::fake('local');
-        Storage::disk('local')->put('generated/expired.pdf', '%PDF-expired');
-        $document = PazSalvo::factory()->create([
-            'expires_at' => now()->subDay(),
-            'pdf_path' => 'generated/expired.pdf',
-        ]);
-        $this->get(route('public.certificates.pdf', $document->verification_token))
-            ->assertForbidden();
-    }
-
-    public function test_valid_certificate_pdf_is_accessible(): void
-    {
-        Storage::fake('local');
-        Storage::disk('local')->put('generated/valid.pdf', '%PDF-valid');
-        $document = PazSalvo::factory()->create([
-            'expires_at' => now()->addDays(30),
-            'pdf_path' => 'generated/valid.pdf',
-        ]);
-        $this->get(route('public.certificates.pdf', $document->verification_token))
-            ->assertOk();
+        $this->actingAs($user)
+            ->withSession(['auth_session_version' => $user->session_version, 'authenticated_session_started_at' => now()->timestamp, 'session_regenerated_at' => now()->timestamp])
+            ->patch(route('paz-salvos.cancel', $document), ['cancel_reason' => 'Segundo intento inválido'])
+            ->assertSessionHasErrors('cancel_reason');
     }
 }

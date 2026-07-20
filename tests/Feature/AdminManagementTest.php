@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -22,6 +24,10 @@ class AdminManagementTest extends TestCase
 
         foreach (['client_id', 'general_admin_signature_id', 'total_balance', 'pdf_path'] as $column) {
             $this->assertTrue(Schema::hasColumn('paz_salvos', $column), "Missing column: {$column}");
+        }
+
+        foreach (['two_factor_secret', 'two_factor_recovery_codes', 'two_factor_confirmed_at'] as $column) {
+            $this->assertFalse(Schema::hasColumn('users', $column), "Unexpected MFA column: {$column}");
         }
 
         $this->assertFalse(Schema::hasTable('login_lockouts'));
@@ -52,19 +58,17 @@ class AdminManagementTest extends TestCase
             'email' => 'nuevo@aaud.gob.pa',
             'agency_id' => $agency->id,
             'role' => $operator->name,
-            'password' => 'aaud.123',
-            'password_confirmation' => 'aaud.123',
         ])->assertRedirect();
         $user = User::where('email', 'nuevo@aaud.gob.pa')->firstOrFail();
         $this->assertTrue($user->hasRole('operador'));
+        $this->assertTrue($user->must_change_password);
+        $this->assertTrue(Hash::check('aaud.123', $user->password));
 
         $this->actingAs($actor)->put("/admin/users/{$user->id}", [
             'name' => 'Usuario Editado',
             'email' => 'editado@aaud.gob.pa',
             'agency_id' => $agency->id,
             'role' => $operator->name,
-            'password' => 'nueva.123',
-            'password_confirmation' => 'nueva.123',
         ])->assertRedirect();
         $this->actingAs($actor)->patch("/admin/users/{$user->id}/toggle")->assertRedirect();
         $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'Usuario Editado', 'email' => 'editado@aaud.gob.pa', 'is_active' => false]);
@@ -86,7 +90,7 @@ class AdminManagementTest extends TestCase
         $permission = Permission::create(['name' => 'administrar usuarios', 'guard_name' => 'web']);
         $actor->givePermissionTo($permission);
 
-        \Illuminate\Support\Facades\DB::table('sessions')->insert([
+        DB::table('sessions')->insert([
             'id' => 'target-session',
             'user_id' => $target->id,
             'ip_address' => '127.0.0.1',
@@ -104,6 +108,7 @@ class AdminManagementTest extends TestCase
                     ->where('id', $target->id)
                     ->where('login_attempts', 2)
                     ->where('is_login_blocked', true)
+                    ->where('must_change_password', false)
                     ->where('has_active_session', true)
                     ->where('active_session_count', 1)
                     ->etc()

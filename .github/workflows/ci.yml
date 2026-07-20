@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: paz_salvo_aaud_testing
+          POSTGRES_USER: pazsalvo_test
+          POSTGRES_PASSWORD: testing_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pazsalvo_test -d paz_salvo_aaud_testing"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, fileinfo, pgsql, pdo_pgsql, gd, zip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.1'
+          cache: npm
+      - run: composer validate --strict
+      - run: composer install --prefer-dist --no-interaction --no-progress
+      - run: composer audit
+      - run: npm ci
+      - run: npm audit
+      - run: npm run lint
+      - run: npm run build
+      - run: php artisan test
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:9QlrOmDX0DRvadFpDqLnY9fm+brfhGV24dgnkRdMzOE=
+          APP_DEBUG: "false"
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: paz_salvo_aaud_testing
+          DB_USERNAME: pazsalvo_test
+          DB_PASSWORD: testing_password
+          PUBLIC_VERIFICATION_BASE_URL: http://public.test/verificar
+          USER_TEMPORARY_PASSWORD: aaud.123
+          SESSION_DRIVER: array
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
