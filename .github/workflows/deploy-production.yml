@@ -1,0 +1,65 @@
+name: deploy-production
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: pazsalvo-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, production, pazsalvo]
+    environment: production
+    timeout-minutes: 20
+    env:
+      EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      PRODUCTION_HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+    steps:
+      - name: Download artifact from successful CI run
+        uses: actions/download-artifact@v4
+        with:
+          name: pazsalvo-production-${{ github.event.workflow_run.head_sha }}
+          path: ${{ runner.temp }}/pazsalvo-production-${{ github.run_id }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Verify and activate exact CI artifact
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/pazsalvo-production-${{ github.run_id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid CI commit SHA' >&2; exit 1; }
+          cd "$ARTIFACT_DIR"
+          sha256sum --check release.tar.gz.sha256
+          release="$(date -u +%Y%m%d-%H%M%S)-${EXPECTED_SHA:0:7}"
+          [[ "$release" =~ ^[0-9]{8}-[0-9]{6}-[a-f0-9]{7}$ ]] || exit 1
+          base=/var/www/paz-salvo-private
+          target="$base/releases/$release"
+          test -d "$base/releases" && test ! -L "$base/releases"
+          test -d "$base/shared" && test ! -L "$base/shared"
+          test ! -e "$target" && test ! -L "$target"
+          cleanup() {
+            if [[ -d "$target" && ! -L "$target" ]]; then
+              if [[ ! -L "$base/current" || "$(readlink -f -- "$base/current")" != "$target" ]]; then
+                rm -rf -- "$target"
+              fi
+            fi
+          }
+          trap cleanup EXIT
+          mkdir -- "$target"
+          tar -xzf release.tar.gz -C "$target" --no-same-owner
+          test "$(<"$target/RELEASE_SHA")" = "$EXPECTED_SHA"
+          bash "$target/scripts/production/deploy.sh" "$release" "$EXPECTED_SHA"
+          trap - EXIT

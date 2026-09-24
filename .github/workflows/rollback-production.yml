@@ -1,0 +1,78 @@
+name: rollback-production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Release ID (leave blank to list available releases without changing current)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pazsalvo-production
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, production, pazsalvo]
+    environment: production
+    timeout-minutes: 10
+    env:
+      REQUESTED_RELEASE: ${{ inputs.release }}
+      PRODUCTION_HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+    steps:
+      - name: Validate release and switch current
+        run: |
+          set -Eeuo pipefail
+          base=/var/www/paz-salvo-private
+          releases="$base/releases"
+          test -d "$releases" && test ! -L "$releases"
+          test ! -e "$base/current" || test -L "$base/current" || { echo 'current is not a symlink' >&2; exit 1; }
+          echo 'Available prepared releases:'
+          find "$releases" -mindepth 2 -maxdepth 2 -name .release-ready -type f -printf '%h\n' | sed "s|^$releases/||" | sort -r
+          if [[ -z "$REQUESTED_RELEASE" ]]; then
+            echo 'Enter one of the listed release IDs to perform rollback.'
+            exit 0
+          fi
+          [[ "$REQUESTED_RELEASE" =~ ^[0-9]{8}-[0-9]{6}-[a-f0-9]{7}$ ]] || { echo 'Invalid release ID' >&2; exit 1; }
+          target="$releases/$REQUESTED_RELEASE"
+          test -d "$target" && test ! -L "$target" && test "$(realpath -e -- "$target")" = "$target"
+          test -f "$target/.release-ready"
+          test -f "$target/artisan" && test -f "$target/vendor/autoload.php"
+          test -f "$target/public/index.php" && test -f "$target/public/build/manifest.json"
+          test "$(readlink -- "$target/.env")" = "$base/shared/.env"
+          test "$(readlink -- "$target/storage")" = "$base/shared/storage"
+          previous=''
+          if [[ -L "$base/current" ]]; then
+            previous="$(readlink -f -- "$base/current")"
+            previous_id="${previous##*/}"
+            [[ "$previous_id" =~ ^[0-9]{8}-[0-9]{6}-[a-f0-9]{7}$ ]] &&
+              [[ "$previous" == "$releases/$previous_id" ]] &&
+              test -f "$previous/.release-ready" || { echo 'current points outside prepared releases' >&2; exit 1; }
+          fi
+          temp="$base/.current-rollback-${{ github.run_id }}"
+          test ! -e "$temp" && test ! -L "$temp"
+          trap 'if [[ -L "$temp" ]]; then unlink -- "$temp"; fi' EXIT
+          ln -s -- "releases/$REQUESTED_RELEASE" "$temp"
+          mv -Tf -- "$temp" "$base/current"
+          echo "Active release: $REQUESTED_RELEASE"
+          if [[ -n "$PRODUCTION_HEALTH_URL" ]]; then
+            for attempt in 1 2 3 4 5; do
+              code="$(curl --silent --output /dev/null --write-out '%{http_code}' --connect-timeout 3 --max-time 10 "$PRODUCTION_HEALTH_URL")" || code=000
+              if [[ "$code" == 200 ]]; then exit 0; fi
+              sleep 3
+            done
+            echo 'Rollback health check failed; restoring previous current.' >&2
+            if [[ -n "$previous" && -d "$previous" ]]; then
+              ln -s -- "releases/${previous##*/}" "$temp"
+              mv -Tf -- "$temp" "$base/current"
+            else
+              unlink -- "$base/current"
+            fi
+            exit 1
+          fi
+          echo 'PRODUCTION_HEALTH_URL is unset; HTTP health check skipped.'

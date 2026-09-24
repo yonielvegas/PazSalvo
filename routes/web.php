@@ -3,18 +3,15 @@
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\ForcedPasswordChangeController;
 use App\Http\Controllers\HealthCheckController;
+use App\Http\Controllers\InstitutionalAccessController;
 use App\Http\Controllers\PazSalvoController;
 use App\Http\Controllers\PazSalvoHistoryController;
 use App\Http\Controllers\RolePermissionController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 
-Route::get('/', function () {
-    return auth()->check()
-        ? redirect()->route('paz-salvo.index')
-        : redirect()->route('login');
-})->name('institutional.access');
-Route::get('/acceso-institucional', fn () => redirect()->route('institutional.access'));
+Route::get('/', InstitutionalAccessController::class)->name('institutional.access');
+Route::redirect('/acceso-institucional', '/');
 Route::get('/healthz', HealthCheckController::class)->middleware('internal.network')->name('healthz');
 
 Route::middleware('guest')->group(function () {

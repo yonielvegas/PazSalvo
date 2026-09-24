@@ -75,3 +75,66 @@ jobs:
       - name: Test suite
         run: php artisan test
       - run: git diff --check
+
+  package-production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify checked-out commit
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, fileinfo, gd, mbstring, pdo_pgsql, pgsql, simplexml, xml, xmlreader, xmlwriter, zip
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Build production dependencies and assets
+        run: |
+          set -Eeuo pipefail
+          composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
+          npm ci
+          npm run build
+      - name: Package immutable release
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          staging="$(mktemp -d)"
+          trap 'rm -rf -- "$staging"' EXIT
+          git archive --format=tar "$EXPECTED_SHA" | tar -xf - -C "$staging"
+          cp -a vendor "$staging/vendor"
+          mkdir -p "$staging/public"
+          cp -a public/build "$staging/public/build"
+          test -f "$staging/artisan"
+          test -f "$staging/vendor/autoload.php"
+          test -f "$staging/public/index.php"
+          test -f "$staging/public/build/manifest.json"
+          printf '%s\n' "$EXPECTED_SHA" > "$staging/RELEASE_SHA"
+          tar -C "$staging" \
+            --exclude='./.github' --exclude='./.env' --exclude='./.env.example' \
+            --exclude='./.env.production.example' --exclude='./tests' \
+            --exclude='./docs' --exclude='./node_modules' \
+            --exclude='./storage' --exclude='./bootstrap/cache' \
+            --exclude='./phpunit.xml' --exclude='./.gitignore' --exclude='./auth.json' \
+            -czf "$RUNNER_TEMP/release.tar.gz" .
+          (cd "$RUNNER_TEMP" && sha256sum release.tar.gz > release.tar.gz.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pazsalvo-production-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/release.tar.gz
+            ${{ runner.temp }}/release.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
