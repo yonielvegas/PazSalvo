@@ -41,7 +41,10 @@ chmod 2770 -- "$target/bootstrap/cache"
 ln -s -- "$shared/.env" "$target/.env"
 ln -s -- "$shared/storage" "$target/storage"
 cd "$target"
-"${php[@]}" artisan optimize:clear
+"${php[@]}" artisan config:clear
+"${php[@]}" artisan route:clear
+"${php[@]}" artisan view:clear
+"${php[@]}" artisan event:clear
 "${php[@]}" artisan config:cache
 "${php[@]}" artisan route:cache
 "${php[@]}" artisan view:cache
