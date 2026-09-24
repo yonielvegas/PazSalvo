@@ -62,7 +62,7 @@ class AdminManagementTest extends TestCase
         $user = User::where('email', 'nuevo@aaud.gob.pa')->firstOrFail();
         $this->assertTrue($user->hasRole('operador'));
         $this->assertTrue($user->must_change_password);
-        $this->assertTrue(Hash::check('aaud.123', $user->password));
+        $this->assertTrue(Hash::check((string) config('security.temporary_user_password'), $user->password));
 
         $this->actingAs($actor)->put("/admin/users/{$user->id}", [
             'name' => 'Usuario Editado',

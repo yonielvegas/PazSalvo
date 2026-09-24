@@ -44,7 +44,7 @@ class ForcedPasswordChangeTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('admin/users/index')
-                ->where('temporary_password', 'aaud.123')
+                ->where('temporary_password', config('security.temporary_user_password'))
                 ->has('users', fn ($users) => $users
                     ->where('1.id', $target->id)
                     ->where('1.must_change_password', false)
@@ -94,7 +94,7 @@ class ForcedPasswordChangeTest extends TestCase
         $this->assertTrue($target->must_change_password);
         $this->assertNull($target->password_changed_at);
         $this->assertSame($admin->id, $target->password_reset_by);
-        $this->assertTrue(Hash::check('aaud.123', $target->password));
+        $this->assertTrue(Hash::check((string) config('security.temporary_user_password'), $target->password));
         $this->assertSame(5, $target->session_version);
         $this->assertDatabaseMissing('sessions', ['id' => 'target-session']);
 
@@ -122,7 +122,7 @@ class ForcedPasswordChangeTest extends TestCase
         $this->assertFalse($target->is_login_blocked);
         $this->assertSame(0, $target->login_attempts);
         $this->assertTrue($target->must_change_password);
-        $this->assertTrue(Hash::check('aaud.123', $target->password));
+        $this->assertTrue(Hash::check((string) config('security.temporary_user_password'), $target->password));
     }
 
     public function test_old_password_stops_working_and_temporary_password_redirects_to_forced_change(): void
@@ -139,7 +139,7 @@ class ForcedPasswordChangeTest extends TestCase
         $this->post(route('login.store'), ['email' => $target->email, 'password' => 'ClaveAnterior.123'])
             ->assertSessionHasErrors();
 
-        $this->post(route('login.store'), ['email' => $target->email, 'password' => 'aaud.123'])
+        $this->post(route('login.store'), ['email' => $target->email, 'password' => config('security.temporary_user_password')])
             ->assertRedirect(route('password.force-change'));
     }
 
@@ -158,11 +158,28 @@ class ForcedPasswordChangeTest extends TestCase
             ->assertRedirect('/');
     }
 
+    public function test_forced_password_validation_rejects_configured_temporary_password(): void
+    {
+        $user = $this->operator([
+            'password' => Hash::make((string) config('security.temporary_user_password')),
+            'must_change_password' => true,
+        ]);
+        $password = (string) config('security.temporary_user_password');
+
+        $this->actingAs($user)
+            ->withSession(['auth_session_version' => $user->session_version, 'authenticated_session_started_at' => now()->timestamp, 'session_regenerated_at' => now()->timestamp])
+            ->put(route('password.force-change.update'), [
+                'password' => $password,
+                'password_confirmation' => $password,
+            ])
+            ->assertSessionHasErrors('password');
+    }
+
     #[DataProvider('invalidPasswords')]
     public function test_forced_password_validation_rejects_invalid_passwords(string $password): void
     {
         $user = $this->operator([
-            'password' => Hash::make('aaud.123'),
+            'password' => Hash::make((string) config('security.temporary_user_password')),
             'must_change_password' => true,
         ]);
 
@@ -183,7 +200,6 @@ class ForcedPasswordChangeTest extends TestCase
             'no lowercase' => ['CLAVE.123'],
             'no number' => ['ClaveTemporal!'],
             'no symbol' => ['ClaveTemporal123'],
-            'temporary password' => ['aaud.123'],
         ];
     }
 
@@ -203,7 +219,7 @@ class ForcedPasswordChangeTest extends TestCase
     public function test_valid_forced_password_change_clears_flag_and_keeps_current_session_valid(): void
     {
         $user = $this->operator([
-            'password' => Hash::make('aaud.123'),
+            'password' => Hash::make((string) config('security.temporary_user_password')),
             'must_change_password' => true,
             'password_reset_at' => now(),
             'password_reset_by' => $this->admin()->id,
@@ -286,6 +302,6 @@ class ForcedPasswordChangeTest extends TestCase
         $this->assertSame(0, $target->login_attempts);
         $this->assertFalse($target->is_login_blocked);
         $this->assertSame(3, $target->session_version);
-        $this->assertTrue(Hash::check('aaud.123', $target->password));
+        $this->assertTrue(Hash::check((string) config('security.temporary_user_password'), $target->password));
     }
 }

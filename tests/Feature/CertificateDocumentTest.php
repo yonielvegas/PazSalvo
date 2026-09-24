@@ -19,6 +19,9 @@ class CertificateDocumentTest extends TestCase
         $paths = [];
         try {
             $paths[] = $qr = app(QrCodeService::class)->generate('http://localhost/verificar/00000000-0000-4000-8000-000000000000', 'TEST-000001');
+            $disk = Storage::disk(config('paz-salvo.disk'));
+            $this->assertTrue($disk->exists($qr));
+            $this->assertSame("\x89PNG\r\n\x1a\n", substr($disk->get($qr), 0, 8));
             $paths[] = $xlsx = app(PazSalvoExcelService::class)->generate([
                 'folio' => 'CC-000001-2026', 'client_number' => '34787', 'holder_name' => 'CLIENTE DE PRUEBA',
                 'full_address' => 'PANAMÁ - CALLE DE PRUEBA', 'issued_at' => $issued, 'expires_at' => $issued->copy()->addDays(30),
@@ -28,7 +31,6 @@ class CertificateDocumentTest extends TestCase
                 'legal_text' => config('paz-salvo.legal_text'),
             ], $qr);
             $paths[] = $pdf = app(PdfConversionService::class)->convertXlsxToPdf($xlsx);
-            $disk = Storage::disk(config('paz-salvo.disk'));
             $this->assertTrue($disk->exists($xlsx));
             $this->assertTrue($disk->exists($pdf));
             $book = IOFactory::load($disk->path($xlsx));

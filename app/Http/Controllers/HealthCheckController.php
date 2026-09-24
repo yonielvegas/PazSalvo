@@ -6,6 +6,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\Process\ExecutableFinder;
 
 class HealthCheckController extends Controller
 {
@@ -16,7 +18,7 @@ class HealthCheckController extends Controller
             'database' => $this->database(),
             'cache' => $this->cache(),
             'storage' => $this->storage(),
-            'libreoffice_configured' => trim((string) config('paz-salvo.libreoffice_binary')) !== '',
+            'libreoffice' => $this->libreOffice(),
         ];
 
         $healthy = ! in_array(false, $checks, true);
@@ -40,10 +42,14 @@ class HealthCheckController extends Controller
 
     private function cache(): bool
     {
-        try {
-            Cache::put('healthcheck', '1', 5);
+        $key = 'healthcheck:'.Str::uuid();
 
-            return Cache::get('healthcheck') === '1';
+        try {
+            Cache::put($key, '1', 5);
+            $ok = Cache::get($key) === '1';
+            Cache::forget($key);
+
+            return $ok;
         } catch (\Throwable) {
             return false;
         }
@@ -51,9 +57,10 @@ class HealthCheckController extends Controller
 
     private function storage(): bool
     {
+        $path = 'healthcheck/'.Str::uuid().'.probe';
+
         try {
             $disk = Storage::disk(config('paz-salvo.disk'));
-            $path = 'healthcheck/.probe';
             $disk->put($path, 'ok');
             $ok = $disk->exists($path);
             $disk->delete($path);
@@ -62,5 +69,20 @@ class HealthCheckController extends Controller
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    private function libreOffice(): bool
+    {
+        $binary = trim((string) config('paz-salvo.libreoffice_binary'));
+
+        if ($binary === '') {
+            return false;
+        }
+
+        $resolved = str_contains($binary, DIRECTORY_SEPARATOR)
+            ? $binary
+            : (new ExecutableFinder)->find($binary);
+
+        return $resolved !== null && is_executable($resolved);
     }
 }

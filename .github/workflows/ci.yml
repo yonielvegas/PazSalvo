@@ -5,9 +5,32 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: private-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:9QlrOmDX0DRvadFpDqLnY9fm+brfhGV24dgnkRdMzOE=
+      APP_DEBUG: "false"
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: paz_salvo_aaud_testing
+      DB_USERNAME: pazsalvo_test
+      DB_PASSWORD: testing_password
+      PUBLIC_VERIFICATION_BASE_URL: http://public.test/verificar
+      USER_TEMPORARY_PASSWORD: ci-fixture-not-for-production
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      LIBREOFFICE_BINARY: /usr/bin/libreoffice
     services:
       postgres:
         image: postgres:16
@@ -24,10 +47,16 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - name: Install LibreOffice
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libreoffice-calc
+          libreoffice --version
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, dom, fileinfo, pgsql, pdo_pgsql, gd, zip
+          extensions: dom, fileinfo, gd, mbstring, pdo_pgsql, pgsql, simplexml, xml, xmlreader, xmlwriter, zip
+          coverage: none
       - uses: actions/setup-node@v4
         with:
           node-version: '20.20.1'
@@ -35,23 +64,14 @@ jobs:
       - run: composer validate --strict
       - run: composer install --prefer-dist --no-interaction --no-progress
       - run: composer audit
+      - run: vendor/bin/pint --test
       - run: npm ci
       - run: npm audit
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run build
-      - run: php artisan test
-        env:
-          APP_ENV: testing
-          APP_KEY: base64:9QlrOmDX0DRvadFpDqLnY9fm+brfhGV24dgnkRdMzOE=
-          APP_DEBUG: "false"
-          DB_CONNECTION: pgsql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_DATABASE: paz_salvo_aaud_testing
-          DB_USERNAME: pazsalvo_test
-          DB_PASSWORD: testing_password
-          PUBLIC_VERIFICATION_BASE_URL: http://public.test/verificar
-          USER_TEMPORARY_PASSWORD: aaud.123
-          SESSION_DRIVER: array
-          CACHE_STORE: array
-          QUEUE_CONNECTION: sync
+      - name: Document generation smoke test
+        run: php artisan test --filter=CertificateDocumentTest
+      - name: Test suite
+        run: php artisan test
+      - run: git diff --check
