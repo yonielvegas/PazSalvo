@@ -12,7 +12,7 @@ Deploy y rollback comparten la concurrencia `pazsalvo-production`, sin cancelar 
 
 Crear el Environment `production`; se recomienda habilitar required reviewers y limitarlo a `main` según la política de AAUD. No hace falta un GitHub Secret: el `.env` productivo vive solo en el servidor y el token efímero de Actions lee el artefacto.
 
-Variable opcional del Environment: `PRODUCTION_HEALTH_URL`, URL real accesible desde el runner y terminada en `/healthz`, sin credenciales embebidas. Si está vacía, deploy y rollback omiten el check HTTP y lo informan. `/healthz` usa `internal.network`, así que la IP de origen del runner debe estar permitida.
+Variable opcional del Environment: `PRODUCTION_HEALTH_URL`, URL real accesible desde el runner y terminada en `/healthz`, sin credenciales embebidas. Para la instalación actual corresponde `http://pazsalvo.aaud.local/healthz` cuando esa ruta esté operativa. Si está vacía, deploy y rollback omiten el check HTTP y lo informan. `/healthz` usa `internal.network`, así que la IP de origen del runner debe estar permitida.
 
 ## Preparación manual del servidor
 
@@ -31,7 +31,7 @@ sudo -u pazsalvo-deploy test -w /var/www/paz-salvo-private
 /usr/bin/libreoffice --version
 ```
 
-El administrador debe crear y revisar `shared/.env` fuera de Actions. Usar `.env.production.example` como lista de campos, sin copiarlo como configuración final sin completar valores. Configurar PostgreSQL, Apache/TLS y el pool PHP-FPM de este sitio por separado. El sitio debe apuntar a `/var/www/paz-salvo-private/current/public`. Preparar backup y aprobar/aplicar migraciones manualmente por release antes de exponer código que dependa de ellas. No se proporciona un comando genérico de migración automática por el riesgo de las migraciones históricas. Tampoco se ejecutan seeders.
+El administrador debe crear y revisar `shared/.env` fuera de Actions. Usar `.env.production.example` como lista de campos, sin copiarlo como configuración final sin completar valores. Esta instalación productiva funciona en la red interna AAUD por HTTP, sin reverse proxy: `APP_URL=http://pazsalvo.aaud.local`, `APP_ALLOWED_HOSTS=pazsalvo.aaud.local`, `SESSION_SECURE_COOKIE=false` y `TRUSTED_PROXIES` vacío. El portal público interno usa `PUBLIC_VERIFICATION_BASE_URL=http://pazsalvo-public.aaud.local/verificar`. `APP_DEBUG=false` sigue siendo obligatorio; si `APP_URL` pasa a HTTPS, `SESSION_SECURE_COOKIE=true` será obligatorio. Configurar PostgreSQL, Apache y el pool PHP-FPM de este sitio por separado. El sitio debe apuntar a `/var/www/paz-salvo-private/current/public`. Preparar backup y aprobar/aplicar migraciones manualmente por release antes de exponer código que dependa de ellas. No se proporciona un comando genérico de migración automática por el riesgo de las migraciones históricas. Tampoco se ejecutan seeders.
 
 ## Activación y fallos
 
@@ -51,4 +51,4 @@ En Actions ejecutar `rollback-production` con `release` vacío para enumerar las
 
 PHP 8.4-FPM, PostgreSQL, LibreOffice `/usr/bin/libreoffice`, conectividad de health y permisos efectivos deben quedar listos antes de una prueba de extremo a extremo. El CD no recarga Apache ni PHP-FPM. Si OPcache no valida timestamps, los workers existentes pueden conservar código anterior tras cambiar el symlink; preparar fuera del workflow un reload limitado al pool de este sitio antes de depender de despliegues sin interrupción. No se asume sudo ni se añade sudoers. Scheduler/queue y su reinicio por release requieren coordinación con la configuración final del servidor.
 
-No usar `php artisan serve` ni `npm run dev` en producción. `GET /healthz` valida Laravel, PostgreSQL, cache, storage y LibreOffice; la conversión QR → XLSX → PDF se prueba en CI con datos sintéticos. Revisar `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=true`, `USER_TEMPORARY_PASSWORD`, `PUBLIC_VERIFICATION_BASE_URL`, `APP_ALLOWED_HOSTS` e `INTERNAL_ALLOWED_CIDRS` antes de abrir el sitio. TLS, VPN, backups, monitoreo y continuidad siguen sujetos a validación operativa.
+No usar `php artisan serve` ni `npm run dev` en producción. `GET /healthz` valida Laravel, PostgreSQL, cache, storage y LibreOffice; la conversión QR → XLSX → PDF se prueba en CI con datos sintéticos. Revisar `APP_ENV=production`, `APP_DEBUG=false`, `SESSION_SECURE_COOKIE=false` para el HTTP actual, `USER_TEMPORARY_PASSWORD`, `PUBLIC_VERIFICATION_BASE_URL`, `APP_ALLOWED_HOSTS` e `INTERNAL_ALLOWED_CIDRS` antes de abrir el sitio. El acceso debe permanecer restringido a la red interna AAUD; firewall, VPN, backups, monitoreo y continuidad siguen sujetos a validación operativa.

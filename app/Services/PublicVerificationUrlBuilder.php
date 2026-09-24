@@ -32,8 +32,8 @@ class PublicVerificationUrlBuilder
             throw new InvalidArgumentException('La URL pública de verificación contiene componentes no permitidos.');
         }
 
-        if (config('app.env') === 'production' && $scheme !== 'https') {
-            throw new InvalidArgumentException('La URL pública de verificación debe usar HTTPS en producción.');
+        if (config('app.env') === 'production' && $scheme === 'http' && ! str_ends_with(strtolower((string) $parts['host']), '.aaud.local')) {
+            throw new InvalidArgumentException('La URL pública de verificación por HTTP debe usar un host interno de AAUD en producción.');
         }
 
         $path = rtrim($parts['path'] ?? '', '/');

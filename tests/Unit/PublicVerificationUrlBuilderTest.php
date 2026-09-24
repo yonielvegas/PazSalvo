@@ -3,15 +3,12 @@
 namespace Tests\Unit;
 
 use App\Services\PublicVerificationUrlBuilder;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use InvalidArgumentException;
 use Tests\TestCase;
 
 class PublicVerificationUrlBuilderTest extends TestCase
 {
-    use RefreshDatabase;
-
     private string $token = '00000000-0000-4000-8000-000000000000';
 
     public function test_builds_public_url_from_dedicated_configuration(): void
@@ -38,10 +35,21 @@ class PublicVerificationUrlBuilderTest extends TestCase
         }
     }
 
-    public function test_rejects_http_in_production(): void
+    public function test_allows_internal_http_in_production(): void
     {
         Config::set('app.env', 'production');
-        Config::set('paz_salvo.public_verification_base_url', 'http://public.test/verificar');
+        Config::set('paz_salvo.public_verification_base_url', 'http://pazsalvo-public.aaud.local/verificar');
+
+        $this->assertSame(
+            'http://pazsalvo-public.aaud.local/verificar/'.$this->token,
+            app(PublicVerificationUrlBuilder::class)->build($this->token)
+        );
+    }
+
+    public function test_rejects_external_http_in_production(): void
+    {
+        Config::set('app.env', 'production');
+        Config::set('paz_salvo.public_verification_base_url', 'http://public.example.com/verificar');
 
         $this->expectException(InvalidArgumentException::class);
         app(PublicVerificationUrlBuilder::class)->build($this->token);

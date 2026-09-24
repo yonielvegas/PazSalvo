@@ -43,8 +43,16 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
 
-            if (config('app.debug') || ! config('session.secure')) {
-                $missing[] = 'APP_DEBUG_FALSE_AND_SECURE_COOKIES';
+            if (config('app.debug') !== false) {
+                $missing[] = 'APP_DEBUG';
+            }
+
+            $appUrl = parse_url((string) config('app.url'));
+            $scheme = is_array($appUrl) ? strtolower((string) ($appUrl['scheme'] ?? '')) : '';
+            if (! in_array($scheme, ['http', 'https'], true) || empty($appUrl['host'])) {
+                $missing[] = 'APP_URL';
+            } elseif ($scheme === 'https' && config('session.secure') !== true) {
+                $missing[] = 'SESSION_SECURE_COOKIE';
             }
 
             if ($missing !== []) {
