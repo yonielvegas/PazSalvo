@@ -101,6 +101,9 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Build production dependencies and assets
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:9QlrOmDX0DRvadFpDqLnY9fm+brfhGV24dgnkRdMzOE=
         run: |
           set -Eeuo pipefail
           composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress
