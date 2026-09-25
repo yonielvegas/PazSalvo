@@ -148,7 +148,12 @@ jobs:
             --exclude='./docs' --exclude='./node_modules' \
             --exclude='./storage' --exclude='./bootstrap/cache' \
             --exclude='./phpunit.xml' --exclude='./.gitignore' --exclude='./auth.json' \
-            -czf "$RUNNER_TEMP/release.tar.gz" .
+            -cf "$RUNNER_TEMP/release.tar" .
+          tar -C "$staging" -rf "$RUNNER_TEMP/release.tar" ./storage/app/private/templates
+          gzip "$RUNNER_TEMP/release.tar"
+          for template in plantilla_paz_y_salvo.xlsx clientes.xlsx assets/AAUD.jpg assets/Firma.jpeg; do
+            tar -tzf "$RUNNER_TEMP/release.tar.gz" "./storage/app/private/templates/$template" > /dev/null
+          done
           if tar -tzf "$RUNNER_TEMP/release.tar.gz" | grep -E '^\./\.env(\.|$)'; then
             echo 'Production artifact contains an environment file' >&2
             exit 1
