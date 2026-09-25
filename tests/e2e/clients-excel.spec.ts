@@ -9,8 +9,9 @@ const fixture = join(tmpdir(), 'clients-e2e.xlsx');
 async function login(page: import('@playwright/test').Page, email: string) {
     await page.goto('/login');
     await page.getByLabel('Correo electrónico').fill(email);
-    await page.getByLabel('Contraseña').fill(password);
+    await page.locator('#login-password').fill(password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
+    await page.waitForURL('**/paz-salvos/consultar');
 }
 
 test.beforeAll(() => { execFileSync('php', ['tests/e2e/create-fixture.php']); });
@@ -19,11 +20,17 @@ test('admin carga, reemplaza, descarga y elimina Excel', async ({ page }) => {
     await login(page, 'admin@aaud.gob.pa');
     await page.getByRole('link', { name: 'Excel de Clientes' }).click();
     await expect(page.getByRole('heading', { name: 'Excel de Clientes' })).toBeVisible();
+    while (await page.locator('.client-excel-row').count()) {
+        await page.locator('.client-excel-row').first().getByRole('button', { name: 'Eliminar' }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Eliminar' }).click();
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+    }
 
     for (let index = 1; index <= 3; index++) {
         await page.locator('#client-excel-input').setInputFiles({ name: `clientes_${index}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: (await import('node:fs')).readFileSync(fixture) });
         await page.getByRole('button', { name: 'Subir archivo' }).click();
         await expect(page.getByRole('status')).toContainText('cargado correctamente');
+        await expect(page.locator('.client-excel-row').first()).toContainText(`clientes_${index}.xlsx`);
     }
     await expect(page.locator('.client-excel-row')).toHaveCount(3);
     await expect(page.locator('.client-excel-row').first()).toContainText('Actual');

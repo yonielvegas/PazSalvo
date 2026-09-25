@@ -67,7 +67,7 @@ export default function ClientExcelIndex({ files, maxSizeMb }: { files: ExcelFil
                 onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); input.current?.click(); } }}
                 onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
-                onDrop={(event) => { event.preventDefault(); setDragging(false); choose(event.dataTransfer.files[0]); }}>
+                onDrop={(event) => { event.preventDefault(); setDragging(false); if (event.dataTransfer.files.length !== 1) { setError('Seleccione un solo archivo Excel.'); setSelected(null); } else choose(event.dataTransfer.files[0]); }}>
                 <UploadCloud size={30} /><strong>Arrastre un Excel aquí o haga clic para buscarlo</strong><span>Formatos .xlsx y .xls</span>
             </div>
             {selected && <div className="client-excel-selected"><FileSpreadsheet size={20} /><span title={selected.name}><strong>{selected.name}</strong><small>{sizeLabel(selected.size)}</small></span><button type="button" className="btn-secondary" onClick={() => input.current?.click()} disabled={busy}>Reemplazar</button><button type="button" className="icon-btn" aria-label="Cancelar selección" onClick={() => { setSelected(null); if (input.current) input.current.value = ''; }} disabled={busy}><X size={18} /></button></div>}
