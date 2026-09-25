@@ -25,6 +25,9 @@ class MasterDataSeeder extends Seeder
             'administrar usuarios',
             'administrar agencias',
             'administrar roles',
+            'clients-excel.view',
+            'clients-excel.download',
+            'clients-excel.delete',
         ];
 
         $models = collect($permissions)->mapWithKeys(

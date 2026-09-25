@@ -27,6 +27,7 @@ jobs:
       DB_PASSWORD: testing_password
       PUBLIC_VERIFICATION_BASE_URL: http://public.test/verificar
       USER_TEMPORARY_PASSWORD: ci-fixture-not-for-production
+      SEED_TEMPORARY_USER_PASSWORD: e2e-test-password
       SESSION_DRIVER: array
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
@@ -78,6 +79,13 @@ jobs:
         run: php artisan test --filter=CertificateDocumentTest
       - name: Test suite
         run: php artisan test
+      - name: Browser E2E
+        env:
+          SESSION_DRIVER: file
+        run: |
+          php artisan migrate:fresh --seed --force
+          npx playwright install --with-deps chromium
+          npm run test:e2e
       - run: git diff --check
 
   package-production:

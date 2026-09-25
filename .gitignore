@@ -17,6 +17,8 @@
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
+/playwright-report
+/test-results
 /public/storage
 /storage/*.key
 /storage/pail

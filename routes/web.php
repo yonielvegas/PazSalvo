@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\ClientExcelFileController;
 use App\Http\Controllers\ForcedPasswordChangeController;
 use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\InstitutionalAccessController;
@@ -27,6 +28,10 @@ Route::middleware(['auth', 'single.session', 'idle.timeout', 'internal.network']
 });
 
 Route::middleware(['auth', 'single.session', 'idle.timeout', 'internal.network', 'password.changed'])->group(function () {
+    Route::get('/admin/clients-excel', [ClientExcelFileController::class, 'index'])->middleware('permission:clients-excel.view')->name('clients-excel.index');
+    Route::post('/admin/clients-excel', [ClientExcelFileController::class, 'store'])->middleware('permission:clients-excel.view')->name('clients-excel.store');
+    Route::get('/admin/clients-excel/{file}/download', [ClientExcelFileController::class, 'download'])->middleware('permission:clients-excel.download')->name('clients-excel.download');
+    Route::delete('/admin/clients-excel/{file}', [ClientExcelFileController::class, 'destroy'])->middleware('permission:clients-excel.delete')->name('clients-excel.destroy');
     Route::get('/paz-salvos/consultar', [PazSalvoController::class, 'index'])->middleware('permission:consultar paz y salvo')->name('paz-salvo.index');
     Route::post('/paz-salvos/consultar', [PazSalvoController::class, 'consult'])->middleware(['permission:consultar paz y salvo', 'throttle:20,1'])->name('paz-salvo.consult');
     Route::post('/paz-salvos/generar', [PazSalvoController::class, 'generate'])->middleware(['permission:generar paz y salvo', 'throttle:10,1'])->name('paz-salvo.generate');

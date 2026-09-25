@@ -11,7 +11,7 @@ class ClientExcelLookupService
     public function findByClientNumber(string $clientNumber): ?array
     {
         $disk = Storage::disk(config('paz-salvo.disk'));
-        $relativePath = config('paz-salvo.clients_excel');
+        $relativePath = app(ClientExcelFileService::class)->latest()?->path ?? config('paz-salvo.clients_excel');
         if (! $disk->exists($relativePath)) {
             throw new ExcelLookupException('No se encontró el Excel maestro de clientes.');
         }

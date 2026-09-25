@@ -3,6 +3,9 @@
 return [
     'disk' => env('PAZ_SALVO_DISK', 'local'),
     'clients_excel' => env('PAZ_SALVO_CLIENTS_EXCEL', 'templates/clientes.xlsx'),
+    'clients_excel_max_kb' => (int) env('PAZ_SALVO_CLIENTS_EXCEL_MAX_KB', 10240),
+    'clients_excel_retention' => 3,
+    'clients_excel_dir' => 'clients-excel',
     'template_excel' => env('PAZ_SALVO_TEMPLATE_EXCEL', 'templates/plantilla_paz_y_salvo.xlsx'),
     'output_dir' => env('PAZ_SALVO_OUTPUT_DIR', 'generated/paz-salvos'),
     'logo' => env('PAZ_SALVO_LOGO', 'templates/assets/AAUD.jpg'),
