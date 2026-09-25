@@ -23,6 +23,7 @@ class HealthCheckTest extends TestCase
             ->assertOk()
             ->assertJsonPath('checks.libreoffice', true)
             ->assertJsonPath('status', 'ok')
+            ->assertJsonStructure(['release'])
             ->assertJsonMissingPath('checks.libreoffice_path');
     }
 

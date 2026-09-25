@@ -9,6 +9,7 @@ releases="$base/releases"
 shared="$base/shared"
 current="$base/current"
 php=(/usr/bin/php8.4 -d memory_limit=256M)
+source "$(dirname -- "${BASH_SOURCE[0]}")/runtime.sh"
 
 [[ "$release" =~ ^[0-9]{8}-[0-9]{6}-[a-f0-9]{7}$ ]] || { echo 'Invalid release ID' >&2; exit 1; }
 [[ "$expected_sha" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid commit SHA' >&2; exit 1; }
@@ -23,7 +24,7 @@ test -r "$shared/.env" || { echo 'Production .env is not readable by pazsalvo-de
 test -d "$shared/storage" && test ! -L "$shared/storage" || { echo 'Missing shared/storage' >&2; exit 1; }
 (umask 0007; mkdir -p -- "$shared/storage/app/private" "$shared/storage/app/public" \
   "$shared/storage/framework/cache/data" "$shared/storage/framework/sessions" \
-  "$shared/storage/framework/views" "$shared/storage/logs")
+  "$shared/storage/logs")
 test "$(<"$target/RELEASE_SHA")" = "$expected_sha"
 test -f "$target/artisan" && test -f "$target/vendor/autoload.php"
 test -f "$target/public/index.php" && test -f "$target/public/build/manifest.json"
@@ -35,6 +36,7 @@ if [[ -e "$target/storage" ]]; then
 fi
 test -d "$target/bootstrap" && test ! -L "$target/bootstrap"
 mkdir -p -- "$target/bootstrap/cache"
+mkdir -p -- "$target/bootstrap/cache/views"
 test ! -L "$target/bootstrap/cache"
 chgrp -Rh www-data -- "$target"
 chmod 2770 -- "$target/bootstrap/cache"
@@ -56,21 +58,7 @@ chmod -R g+rwX -- "$target/bootstrap/cache"
 chmod 2770 -- "$target/bootstrap/cache"
 
 # Validate the paths and group permissions Apache needs before switching current.
-test -f "$target/public/index.php" || { echo 'Release is missing public/index.php' >&2; exit 1; }
-test "$(stat -c '%G' -- "$target")" = www-data || { echo 'Release group is not www-data' >&2; exit 1; }
-test "$(stat -c '%a' -- "$target")" = 2750 || { echo 'Release root must have mode 2750' >&2; exit 1; }
-public_mode="$(stat -c '%a' -- "$target/public")"
-(( (8#$public_mode & 0010) != 0 )) || { echo 'Apache cannot traverse release/public' >&2; exit 1; }
-index_mode="$(stat -c '%a' -- "$target/public/index.php")"
-(( (8#$index_mode & 0040) != 0 )) || { echo 'Apache cannot read public/index.php' >&2; exit 1; }
-test -L "$target/.env" && test "$(readlink -- "$target/.env")" = "$shared/.env" || { echo 'Invalid release .env symlink' >&2; exit 1; }
-test -L "$target/storage" && test "$(readlink -- "$target/storage")" = "$shared/storage" || { echo 'Invalid release storage symlink' >&2; exit 1; }
-test -d "$target/bootstrap/cache" && test ! -L "$target/bootstrap/cache" &&
-  test "$(stat -c '%G' -- "$target/bootstrap/cache")" = www-data &&
-  test "$(stat -c '%a' -- "$target/bootstrap/cache")" = 2770 || {
-    echo 'Release bootstrap/cache must be a directory with group www-data and mode 2770' >&2
-    exit 1
-  }
+python3 "$runtime_dir/validate_release.py" preflight "$target" "$shared"
 
 previous=''
 if [[ -L "$current" ]]; then
@@ -87,36 +75,7 @@ elif [[ -e "$current" ]]; then
   exit 1
 fi
 
-temp="$base/.current-$release"
-test ! -e "$temp" && test ! -L "$temp"
-trap 'if [[ -L "$temp" ]]; then unlink -- "$temp"; fi' EXIT
-ln -s -- "releases/$release" "$temp"
-mv -Tf -- "$temp" "$current"
-echo "Activated release $release for $expected_sha"
-
-if [[ -n "${PRODUCTION_HEALTH_URL:-}" ]]; then
-  healthy=false
-  for attempt in 1 2 3 4 5; do
-    code="$(curl --silent --output /dev/null --write-out '%{http_code}' --connect-timeout 3 --max-time 10 "$PRODUCTION_HEALTH_URL")" || code=000
-    if [[ "$code" == 200 ]]; then healthy=true; break; fi
-    sleep 3
-  done
-  if [[ "$healthy" != true ]]; then
-    echo 'Health check failed; restoring previous release.' >&2
-    if [[ -n "$previous" ]]; then
-      ln -s -- "releases/${previous##*/}" "$temp"
-      mv -Tf -- "$temp" "$current"
-      echo "Restored release ${previous##*/}" >&2
-    else
-      unlink -- "$current"
-      echo 'First deployment failed health check; current removed.' >&2
-    fi
-    exit 1
-  fi
-else
-  echo 'PRODUCTION_HEALTH_URL is unset; HTTP health check skipped.'
-fi
-touch -- "$target/.release-ready"
+activate_and_validate "$base" "$target" "$previous" "$expected_sha" "$target/.release-ready"
 
 # Keep active, immediate predecessor, and newest remaining valid release.
 declare -A keep=()

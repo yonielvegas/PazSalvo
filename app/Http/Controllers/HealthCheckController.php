@@ -25,6 +25,7 @@ class HealthCheckController extends Controller
 
         return response()->json([
             'status' => $healthy ? 'ok' : 'degraded',
+            'release' => trim((string) @file_get_contents(dirname(__DIR__, 3).'/RELEASE_SHA')),
             'checks' => $checks,
         ], $healthy ? 200 : 503);
     }

@@ -26,7 +26,6 @@ jobs:
     timeout-minutes: 20
     env:
       EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
-      PRODUCTION_HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
     steps:
       - name: Download artifact from successful CI run
         uses: actions/download-artifact@v4

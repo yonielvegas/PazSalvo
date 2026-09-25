@@ -70,6 +70,10 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+      - name: Production transition tests
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/production -p 'test_*.py'
+          bash tests/production/test_runtime.sh
       - name: Document generation smoke test
         run: php artisan test --filter=CertificateDocumentTest
       - name: Test suite
@@ -126,12 +130,16 @@ jobs:
           test -f "$staging/public/build/manifest.json"
           printf '%s\n' "$EXPECTED_SHA" > "$staging/RELEASE_SHA"
           tar -C "$staging" \
-            --exclude='./.github' --exclude='./.env' --exclude='./.env.example' \
-            --exclude='./.env.production.example' --exclude='./tests' \
+            --exclude='./.github' --exclude='./.env' --exclude='./.env.*' \
+            --exclude='./tests' \
             --exclude='./docs' --exclude='./node_modules' \
             --exclude='./storage' --exclude='./bootstrap/cache' \
             --exclude='./phpunit.xml' --exclude='./.gitignore' --exclude='./auth.json' \
             -czf "$RUNNER_TEMP/release.tar.gz" .
+          if tar -tzf "$RUNNER_TEMP/release.tar.gz" | grep -E '^\./\.env(\.|$)'; then
+            echo 'Production artifact contains an environment file' >&2
+            exit 1
+          fi
           (cd "$RUNNER_TEMP" && sha256sum release.tar.gz > release.tar.gz.sha256)
       - uses: actions/upload-artifact@v4
         with:
