@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+umask 0027
 
 release="${1:-}"
 expected_sha="${2:-}"
@@ -20,10 +21,9 @@ test "$(realpath -e -- "$target")" = "$target"
 test -f "$shared/.env" && test ! -L "$shared/.env" || { echo "Missing production .env at $shared/.env" >&2; exit 1; }
 test -r "$shared/.env" || { echo 'Production .env is not readable by pazsalvo-deploy' >&2; exit 1; }
 test -d "$shared/storage" && test ! -L "$shared/storage" || { echo 'Missing shared/storage' >&2; exit 1; }
-umask 0007
-mkdir -p -- "$shared/storage/app/private" "$shared/storage/app/public" \
+(umask 0007; mkdir -p -- "$shared/storage/app/private" "$shared/storage/app/public" \
   "$shared/storage/framework/cache/data" "$shared/storage/framework/sessions" \
-  "$shared/storage/framework/views" "$shared/storage/logs"
+  "$shared/storage/framework/views" "$shared/storage/logs")
 test "$(<"$target/RELEASE_SHA")" = "$expected_sha"
 test -f "$target/artisan" && test -f "$target/vendor/autoload.php"
 test -f "$target/public/index.php" && test -f "$target/public/build/manifest.json"
@@ -49,7 +49,28 @@ cd "$target"
 "${php[@]}" artisan route:cache
 "${php[@]}" artisan view:cache
 "${php[@]}" artisan event:cache
+chgrp -Rh www-data -- "$target"
+chmod -R g+rX -- "$target"
+chmod 2750 -- "$target"
 chmod -R g+rwX -- "$target/bootstrap/cache"
+chmod 2770 -- "$target/bootstrap/cache"
+
+# Validate the paths and group permissions Apache needs before switching current.
+test -f "$target/public/index.php" || { echo 'Release is missing public/index.php' >&2; exit 1; }
+test "$(stat -c '%G' -- "$target")" = www-data || { echo 'Release group is not www-data' >&2; exit 1; }
+test "$(stat -c '%a' -- "$target")" = 2750 || { echo 'Release root must have mode 2750' >&2; exit 1; }
+public_mode="$(stat -c '%a' -- "$target/public")"
+(( (8#$public_mode & 0010) != 0 )) || { echo 'Apache cannot traverse release/public' >&2; exit 1; }
+index_mode="$(stat -c '%a' -- "$target/public/index.php")"
+(( (8#$index_mode & 0040) != 0 )) || { echo 'Apache cannot read public/index.php' >&2; exit 1; }
+test -L "$target/.env" && test "$(readlink -- "$target/.env")" = "$shared/.env" || { echo 'Invalid release .env symlink' >&2; exit 1; }
+test -L "$target/storage" && test "$(readlink -- "$target/storage")" = "$shared/storage" || { echo 'Invalid release storage symlink' >&2; exit 1; }
+test -d "$target/bootstrap/cache" && test ! -L "$target/bootstrap/cache" &&
+  test "$(stat -c '%G' -- "$target/bootstrap/cache")" = www-data &&
+  test "$(stat -c '%a' -- "$target/bootstrap/cache")" = 2770 || {
+    echo 'Release bootstrap/cache must be a directory with group www-data and mode 2770' >&2
+    exit 1
+  }
 
 previous=''
 if [[ -L "$current" ]]; then

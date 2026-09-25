@@ -40,6 +40,7 @@ jobs:
           ARTIFACT_DIR: ${{ runner.temp }}/pazsalvo-production-${{ github.run_id }}
         run: |
           set -Eeuo pipefail
+          umask 0027
           [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid CI commit SHA' >&2; exit 1; }
           cd "$ARTIFACT_DIR"
           sha256sum --check release.tar.gz.sha256
@@ -58,8 +59,10 @@ jobs:
             fi
           }
           trap cleanup EXIT
-          mkdir -- "$target"
-          tar -xzf release.tar.gz -C "$target" --no-same-owner
+          install -d -m 2750 -- "$target"
+          chgrp www-data -- "$target"
+          chmod 2750 -- "$target"
+          tar -xzf release.tar.gz -C "$target" --no-same-owner --no-same-permissions --no-overwrite-dir
           test "$(<"$target/RELEASE_SHA")" = "$EXPECTED_SHA"
           bash "$target/scripts/production/deploy.sh" "$release" "$EXPECTED_SHA"
           trap - EXIT
