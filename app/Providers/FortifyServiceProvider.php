@@ -72,6 +72,12 @@ class FortifyServiceProvider extends ServiceProvider
             }
 
             if ($user && $user->is_active && Hash::check((string) $request->input('password'), $user->password)) {
+                if (! $user->roles()->exists()) {
+                    throw ValidationException::withMessages([
+                        Fortify::username() => [User::NO_ROLE_LOGIN_MESSAGE],
+                    ]);
+                }
+
                 $user = DB::transaction(function () use ($user) {
                     $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
                     $locked->forceFill([

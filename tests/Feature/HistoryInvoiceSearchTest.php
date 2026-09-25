@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class HistoryInvoiceSearchTest extends TestCase
@@ -23,6 +24,7 @@ class HistoryInvoiceSearchTest extends TestCase
         $user = User::factory()->create();
         Permission::firstOrCreate(['name' => 'ver historial', 'guard_name' => 'web']);
         $user->givePermissionTo('ver historial');
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         return $user;
     }
@@ -278,7 +280,10 @@ class HistoryInvoiceSearchTest extends TestCase
 
     public function test_user_without_history_permission_cannot_access_history(): void
     {
-        $this->actingAs(User::factory()->create())
+        $user = User::factory()->create();
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
+
+        $this->actingAs($user)
             ->get(route('paz-salvos.index'))
             ->assertForbidden();
     }

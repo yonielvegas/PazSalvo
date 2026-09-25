@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ForcedPasswordChangeTest extends TestCase
@@ -20,6 +21,7 @@ class ForcedPasswordChangeTest extends TestCase
         $user = User::factory()->create();
         Permission::firstOrCreate(['name' => 'administrar usuarios', 'guard_name' => 'web']);
         $user->givePermissionTo('administrar usuarios');
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         return $user;
     }
@@ -29,6 +31,7 @@ class ForcedPasswordChangeTest extends TestCase
         $user = User::factory()->create($attributes);
         Permission::firstOrCreate(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
         $user->givePermissionTo('consultar paz y salvo');
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         return $user;
     }
@@ -56,8 +59,10 @@ class ForcedPasswordChangeTest extends TestCase
     public function test_user_without_permission_cannot_reset_passwords(): void
     {
         $target = User::factory()->create();
+        $user = User::factory()->create();
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($user)
             ->patch(route('admin.users.reset-password', $target))
             ->assertForbidden();
     }

@@ -6,6 +6,7 @@ use App\Models\PazSalvo;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ForbiddenAccessTest extends TestCase
@@ -15,6 +16,7 @@ class ForbiddenAccessTest extends TestCase
     public function test_get_request_without_permission_renders_friendly_403_page(): void
     {
         $user = User::factory()->create();
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         $this->actingAs($user)
             ->get('/admin/users')
@@ -31,6 +33,7 @@ class ForbiddenAccessTest extends TestCase
         $user = User::factory()->create();
         Permission::create(['name' => 'ver detalle paz y salvo', 'guard_name' => 'web']);
         $user->givePermissionTo('ver detalle paz y salvo');
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
         $document = PazSalvo::factory()->create();
 
         $this->actingAs($user)

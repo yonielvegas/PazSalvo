@@ -37,6 +37,7 @@ class AdminManagementTest extends TestCase
     public function test_admin_pages_require_corresponding_permission(): void
     {
         $user = User::factory()->create();
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
         $this->actingAs($user)->get('/admin/users')->assertForbidden();
         $permission = Permission::create(['name' => 'administrar usuarios', 'guard_name' => 'web']);
         $user->givePermissionTo($permission);
@@ -52,6 +53,7 @@ class AdminManagementTest extends TestCase
         $consult = Permission::create(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
         $operator = Role::create(['name' => 'operador', 'guard_name' => 'web']);
         $actor->givePermissionTo([$manageUsers, $manageRoles]);
+        $actor->assignRole($operator);
 
         $this->actingAs($actor)->post('/admin/users', [
             'name' => 'Usuario Nuevo',
@@ -89,6 +91,7 @@ class AdminManagementTest extends TestCase
         ]);
         $permission = Permission::create(['name' => 'administrar usuarios', 'guard_name' => 'web']);
         $actor->givePermissionTo($permission);
+        $actor->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         DB::table('sessions')->insert([
             'id' => 'target-session',

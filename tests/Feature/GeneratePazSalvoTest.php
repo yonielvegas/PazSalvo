@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class GeneratePazSalvoTest extends TestCase
@@ -23,6 +24,7 @@ class GeneratePazSalvoTest extends TestCase
         $user = User::factory()->create();
         Permission::create(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
         $user->givePermissionTo('consultar paz y salvo');
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         $this->actingAs($user)
             ->withSession(['auth_session_version' => $user->session_version, 'authenticated_session_started_at' => now()->timestamp, 'session_regenerated_at' => now()->timestamp])
@@ -46,6 +48,7 @@ class GeneratePazSalvoTest extends TestCase
         $user = User::factory()->create();
         $permission = Permission::create(['name' => 'anular paz y salvo', 'guard_name' => 'web']);
         $user->givePermissionTo($permission);
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
         $document = PazSalvo::factory()->create(['pdf_path' => 'generated/certificate.pdf']);
 
         $this->actingAs($user)

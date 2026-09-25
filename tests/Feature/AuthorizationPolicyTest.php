@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class AuthorizationPolicyTest extends TestCase
@@ -19,6 +20,7 @@ class AuthorizationPolicyTest extends TestCase
         $user = User::factory()->create();
         Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         $user->givePermissionTo($permission);
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         return $user;
     }
@@ -50,6 +52,7 @@ class AuthorizationPolicyTest extends TestCase
         $user = User::factory()->create();
         Permission::firstOrCreate(['name' => 'administrar usuarios', 'guard_name' => 'web']);
         $user->givePermissionTo('administrar usuarios');
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         $this->actingAs($user)
             ->withSession(['auth_session_version' => $user->session_version, 'authenticated_session_started_at' => now()->timestamp, 'session_regenerated_at' => now()->timestamp])

@@ -96,6 +96,9 @@ footer { text-align: center; color: #778884; font-size: 12px; padding: 25px; bor
 .login-brand { margin-bottom: 32px; }.login-card h1 { margin-bottom: 4px; }.login-card > p { color: #71817e; margin-top: 0; }
 .login-card label { display: block; margin-top: 18px; font-weight: 700; font-size: 13px; }.login-card label input { margin-top: 7px; }
 .login-card .check { display: flex; align-items: center; gap: 8px; font-weight: 500; }.login-card .check input { width: auto; margin: 0; }.login-card button { width: 100%; margin-top: 22px; }
+.login-password-field { display: block; position: relative; margin-top: 7px; }.login-card .login-password-field input { padding-right: 52px; }
+.login-card .login-password-toggle { position: absolute; right: 5px; top: 4px; width: 42px; height: 42px; margin: 0; padding: 0; border-radius: 8px; color: #40534f; background: transparent; }
+.login-card .login-password-toggle:hover { background: #e7f4f1; transform: none; }.login-card .login-password-toggle:focus-visible { outline: 3px solid #0f766e; outline-offset: 1px; }.login-password-toggle svg { width: 20px; height: 20px; }
 .password-panel { width: min(620px, 100%); }.password-panel label { display:block; margin:15px 0; font-weight:700; font-size:13px; }.password-panel label input { margin-top:7px; }.password-panel button { margin-top:8px; }.saved { margin-left:12px; color:#166534; font-weight:700; }
 .page-heading, .detail-heading { margin-bottom: 25px; }.page-heading h1, .detail-heading h1 { margin: 3px 0; font-size: 36px; }.page-heading p { color: #71817e; }
 .filter-card { display: grid; grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(170px, 1fr)); gap: 12px; padding: 18px; border: 1px solid #dbe7e4; background: white; border-radius: 15px; align-items: end; }

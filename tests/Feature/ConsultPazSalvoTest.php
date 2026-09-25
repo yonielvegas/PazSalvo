@@ -12,6 +12,7 @@ use Illuminate\Testing\TestResponse;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ConsultPazSalvoTest extends TestCase
@@ -23,6 +24,7 @@ class ConsultPazSalvoTest extends TestCase
         $user = User::factory()->create();
         $permission = Permission::firstOrCreate(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
         $user->givePermissionTo($permission);
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         return $user;
     }

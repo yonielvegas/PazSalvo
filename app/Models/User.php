@@ -16,6 +16,8 @@ use Spatie\Permission\Traits\HasRoles;
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
+    public const NO_ROLE_LOGIN_MESSAGE = 'Su usuario no tiene un rol asignado. Contacte al administrador del sistema.';
+
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable;
 

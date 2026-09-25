@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SecurityControlsTest extends TestCase
@@ -17,6 +18,7 @@ class SecurityControlsTest extends TestCase
         $user = User::factory()->create();
         $permission = Permission::firstOrCreate(['name' => $permissionName, 'guard_name' => 'web']);
         $user->givePermissionTo($permission);
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         return $user;
     }
@@ -61,8 +63,10 @@ class SecurityControlsTest extends TestCase
     public function test_non_admin_cannot_unlock_login_attempts(): void
     {
         $target = User::factory()->create();
+        $user = User::factory()->create();
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs($user)
             ->patch(route('admin.users.unlock-login-attempts', $target))
             ->assertStatus(403);
     }
@@ -127,6 +131,7 @@ class SecurityControlsTest extends TestCase
             'login_attempts' => 2,
             'is_login_blocked' => false,
         ]);
+        $user->assignRole(Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web']));
 
         $this->post(route('login.store'), ['email' => $user->email, 'password' => 'password'])
             ->assertRedirect();
