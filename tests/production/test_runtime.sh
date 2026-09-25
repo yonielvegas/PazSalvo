@@ -48,6 +48,21 @@ fi
 test "$(readlink -f -- "$test_base/current")" = "$previous"
 test "$reload_count" -eq 2
 
+validation_calls=()
+validate_served_release() {
+  test "$(readlink -f -- "$test_base/current")" = "$1" || return 1
+  validation_calls+=("${1##*/}:${3:-strict}")
+  [[ "$1" == "$previous" && "${3:-strict}" == legacy-rollback ]]
+}
+reload_count=0
+if activate_and_validate "$test_base" "$target" "$previous" "$(<"$target/RELEASE_SHA")"; then
+  echo 'Failed deploy unexpectedly activated release' >&2
+  exit 1
+fi
+test "$(readlink -f -- "$test_base/current")" = "$previous"
+test "$reload_count" -eq 2
+test "${validation_calls[*]}" = "${target##*/}:strict ${previous##*/}:strict ${previous##*/}:legacy-rollback"
+
 validate_served_release() { return 0; }
 reload_count=0
 activate_and_validate "$test_base" "$target" "$previous" "$(<"$target/RELEASE_SHA")"

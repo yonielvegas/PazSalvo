@@ -73,7 +73,20 @@ class AssetParser(HTMLParser):
             if key not in ("src", "href") or not value:
                 continue
             url = urlsplit(value)
-            if not url.netloc and re.fullmatch(r"/build/assets/[^?#]+\.(?:js|css)", url.path):
+            try:
+                same_site = (
+                    (not url.scheme and not url.netloc)
+                    or (
+                        url.scheme in ("http", "https")
+                        and url.hostname == HOST
+                        and url.port in (None, 80 if url.scheme == "http" else 443)
+                        and url.username is None
+                        and url.password is None
+                    )
+                )
+            except ValueError:
+                continue
+            if same_site and re.fullmatch(r"/build/assets/[^?#]+\.(?:js|css)", url.path):
                 self.assets.add(url.path)
 
 
@@ -89,14 +102,18 @@ def get(path):
         return response.read()
 
 
-def smoke(release, expected_sha):
+def smoke(release, expected_sha, mode="strict"):
+    require(mode in ("strict", "legacy-rollback"), "Invalid smoke validation mode")
     require(re.fullmatch(r"[a-f0-9]{40}", expected_sha), "Invalid expected SHA")
     require((release / "RELEASE_SHA").read_text().strip() == expected_sha, "Release SHA mismatch")
     expected_assets = manifest_files(release)
     def check_health():
         health = json.loads(get("/healthz"))
         require(health.get("status") == "ok", "Health check is degraded")
-        require(health.get("release") == expected_sha, "Served release SHA mismatch")
+        if "release" in health:
+            require(health["release"] == expected_sha, "Served release SHA mismatch")
+        else:
+            require(mode == "legacy-rollback", "Served release SHA missing")
 
     check_health()
     parser = AssetParser()
@@ -114,10 +131,10 @@ if __name__ == "__main__":
         command = sys.argv[1]
         if command == "preflight" and len(sys.argv) == 4:
             preflight(Path(sys.argv[2]), Path(sys.argv[3]))
-        elif command == "smoke" and len(sys.argv) == 4:
-            smoke(Path(sys.argv[2]), sys.argv[3])
+        elif command == "smoke" and len(sys.argv) in (4, 5):
+            smoke(Path(sys.argv[2]), sys.argv[3], sys.argv[4] if len(sys.argv) == 5 else "strict")
         else:
-            raise ValueError("Usage: validate_release.py preflight RELEASE SHARED | smoke RELEASE SHA")
+            raise ValueError("Usage: validate_release.py preflight RELEASE SHARED | smoke RELEASE SHA [strict|legacy-rollback]")
     except (ValueError, OSError, KeyError, json.JSONDecodeError, urllib.error.URLError) as error:
         print(f"Release validation failed: {error}", file=sys.stderr)
         sys.exit(1)

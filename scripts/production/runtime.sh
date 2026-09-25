@@ -28,9 +28,9 @@ switch_current() {
 }
 
 validate_served_release() {
-  local target="$1" sha="$2" attempt
+  local target="$1" sha="$2" mode="${3:-strict}" attempt
   for attempt in 1 2 3 4 5; do
-    if python3 "$runtime_dir/validate_release.py" smoke "$target" "$sha"; then
+    if python3 "$runtime_dir/validate_release.py" smoke "$target" "$sha" "$mode"; then
       return 0
     fi
     if [[ "$attempt" -lt 5 ]]; then sleep 3; fi
@@ -65,9 +65,14 @@ activate_and_validate() {
     echo 'CRITICAL: PHP-FPM reload after restoring current failed.' >&2
     return 1
   fi
-  if [[ -n "$previous" ]] && ! validate_served_release "$previous" "$previous_sha"; then
-    echo 'CRITICAL: Previous release did not pass validation after restoration.' >&2
-    return 1
+  if [[ -n "$previous" ]]; then
+    if ! validate_served_release "$previous" "$previous_sha"; then
+      if [[ "$(readlink -f -- "$base/current")" != "$previous" ]] ||
+        ! validate_served_release "$previous" "$previous_sha" legacy-rollback; then
+        echo 'CRITICAL: Previous release did not pass validation after restoration.' >&2
+        return 1
+      fi
+    fi
   fi
   echo 'Previous runtime restored; operation failed.' >&2
   return 1
