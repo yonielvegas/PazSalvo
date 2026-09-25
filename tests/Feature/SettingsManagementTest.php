@@ -9,6 +9,7 @@ use Database\Seeders\MasterDataSeeder;
 use Database\Seeders\ProductionBootstrapSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -34,6 +35,7 @@ class SettingsManagementTest extends TestCase
         $admin = User::where('email', 'itadmin@aaud.gob.pa')->firstOrFail();
         $this->assertSame('IT Admin', $admin->name);
         $this->assertSame('$2y$12$t9Vr4UdoVG5Pjuq/mk.U8.vK/TwJI3DUZBDs3vWQCt/LylOzFVZ.K', $admin->password);
+        $this->assertSame(12, password_get_info($admin->password)['options']['cost']);
         $this->assertTrue($admin->hasRole('admin'));
         $this->assertSame(AgencyCatalog::IT_ADMIN_AGENCY_CODE, $admin->agency->code);
         $this->assertTrue($admin->is_active);
@@ -46,14 +48,16 @@ class SettingsManagementTest extends TestCase
         $this->assertSame('Dirección existente', $legacy->fresh()->address);
         $this->assertFalse($legacy->fresh()->is_active);
 
-        DB::table('users')->where('id', $admin->id)->update(['password' => 'changed-password-hash', 'session_version' => 9]);
+        $existingPassword = Hash::make('existing-test-password');
+        DB::table('users')->where('id', $admin->id)->update(['password' => $existingPassword, 'session_version' => 9]);
         Role::findByName('admin')->forceFill(['is_active' => false])->save();
         $seeder->run();
         $this->assertSame(5, Agency::count());
         $this->assertSame(1, User::where('email', 'itadmin@aaud.gob.pa')->count());
         $this->assertSame(1, Role::where('name', 'admin')->count());
         $this->assertSame(22, Permission::count());
-        $this->assertSame('changed-password-hash', $admin->fresh()->password);
+        $this->assertSame($existingPassword, $admin->fresh()->password);
+        $this->assertTrue(Hash::check('existing-test-password', $admin->fresh()->password));
         $this->assertSame(9, $admin->fresh()->session_version);
         $this->assertTrue(Role::findByName('admin')->hasPermissionTo('custom.production'));
         $this->assertTrue(filter_var(Role::findByName('admin')->is_active, FILTER_VALIDATE_BOOLEAN));

@@ -40,8 +40,10 @@ class ProductionBootstrapSeeder extends Seeder
             if (! filter_var($role->is_active, FILTER_VALIDATE_BOOLEAN)) {
                 $role->forceFill(['is_active' => true])->save();
             }
-            $user = User::firstOrCreate(['email' => self::IT_ADMIN_EMAIL], [
+            // Insert the supplied bcrypt hash without passing it through User's hashed cast.
+            DB::table('users')->insertOrIgnore([
                 'name' => 'IT Admin',
+                'email' => self::IT_ADMIN_EMAIL,
                 'password' => self::INITIAL_PASSWORD_HASH,
                 'agency_id' => $agency->id,
                 'email_verified_at' => now(),
@@ -51,7 +53,10 @@ class ProductionBootstrapSeeder extends Seeder
                 'login_attempts' => 0,
                 'must_change_password' => false,
                 'session_version' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
+            $user = User::where('email', self::IT_ADMIN_EMAIL)->firstOrFail();
 
             $user->forceFill([
                 'name' => 'IT Admin',
