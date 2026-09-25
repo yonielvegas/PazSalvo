@@ -92,7 +92,8 @@ footer { text-align: center; color: #778884; font-size: 12px; padding: 25px; bor
 .user-menu > span { display: flex; flex-direction: column; text-align: right; font-size: 13px; }
 .user-menu small { color: #71817e; }.user-menu button { padding: 8px; }
 .auth-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-.login-card { width: min(440px, 100%); padding: 36px; border: 1px solid #dbe7e4; border-radius: 22px; background: white; box-shadow: 0 20px 60px rgba(22,68,61,.12); }
+.login-card { position: relative; width: min(440px, 100%); padding: 36px; border: 1px solid #dbe7e4; border-radius: 22px; background: white; box-shadow: 0 20px 60px rgba(22,68,61,.12); }
+.login-watermark { position: absolute; right: 24px; bottom: 12px; color: rgba(22,48,45,.24); font-size: 11px; line-height: 1; letter-spacing: .04em; pointer-events: none; user-select: none; }
 .login-brand { margin-bottom: 32px; }.login-card h1 { margin-bottom: 4px; }.login-card > p { color: #71817e; margin-top: 0; }
 .login-card label { display: block; margin-top: 18px; font-weight: 700; font-size: 13px; }.login-card label input { margin-top: 7px; }
 .login-card .check { display: flex; align-items: center; gap: 8px; font-weight: 500; }.login-card .check input { width: auto; margin: 0; }.login-card button { width: 100%; margin-top: 22px; }
