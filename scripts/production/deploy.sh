@@ -30,6 +30,11 @@ test -f "$target/artisan" && test -f "$target/vendor/autoload.php"
 test -f "$target/public/index.php" && test -f "$target/public/build/manifest.json"
 test ! -e "$target/.env" && test ! -L "$target/.env" || { echo 'Artifact unexpectedly contains .env' >&2; exit 1; }
 test ! -L "$target/storage" || { echo 'Artifact storage is a symlink' >&2; exit 1; }
+for template in plantilla_paz_y_salvo.xlsx clientes.xlsx assets/AAUD.jpg assets/Firma.jpeg; do
+  test -f "$target/storage/app/private/templates/$template" || { echo "Missing release template: $template" >&2; exit 1; }
+done
+mkdir -p -- "$shared/storage/app/private/templates"
+rsync -a -- "$target/storage/app/private/templates/" "$shared/storage/app/private/templates/"
 if [[ -e "$target/storage" ]]; then
   test -d "$target/storage" && test "$(realpath -e -- "$target/storage")" = "$target/storage"
   rm -rf -- "$target/storage"
