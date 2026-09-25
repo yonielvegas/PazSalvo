@@ -15,13 +15,6 @@ class DatabaseSeeder extends Seeder
 
         if (app()->environment('production')) {
             $this->command?->warn('Development and QA bootstrap data was not seeded in production.');
-            //crear usuario de administrador
-            \App\Models\User::create([
-                'name' => 'Administrador',
-                'email' => 'admin@aaud.gob.pa',
-                'password' => bcrypt('admin123'),
-                'role' => 'admin',
-            ]);
 
             return;
         }
