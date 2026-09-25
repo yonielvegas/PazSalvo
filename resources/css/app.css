@@ -1,5 +1,52 @@
 @import 'tailwindcss';
 
+.settings-breadcrumb { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; color: #667773; font-size: 13px; }
+.settings-breadcrumb a { color: #0f766e; font-weight: 750; text-decoration: none; }
+.settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.settings-heading button { flex: 0 0 auto; }
+.settings-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.settings-card { display: flex; align-items: flex-start; gap: 16px; text-decoration: none; color: inherit; min-height: 156px; transition: border-color .18s, transform .18s, box-shadow .18s; }
+.settings-card:hover { border-color: #8bc9bf; box-shadow: 0 12px 28px rgba(22,68,61,.08); transform: translateY(-2px); }
+.settings-card > svg:first-child, .settings-role-icon { color: #0f766e; background: #e7f4f1; border-radius: 11px; padding: 9px; width: 42px; height: 42px; flex: 0 0 auto; }
+.settings-card h2 { margin: 0 0 5px; color: #173d38; }
+.settings-card p { margin: 0; color: #71817e; font-size: 14px; line-height: 1.5; }
+.settings-card-arrow { width: 17px; margin-left: auto; color: #0f766e; }
+.settings-filters { display: flex; gap: 16px; align-items: end; margin-bottom: 18px; }
+.settings-filters form { flex: 1; }
+.settings-filters > div { width: 180px; }
+.settings-filters label, .settings-role-search label, .settings-permission-toolbar label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 750; }
+.settings-filters select { width: 100%; min-height: 44px; }
+.settings-search-row { display: flex; gap: 8px; }
+.settings-search-row input { min-height: 44px; padding: 9px 12px; font-size: 15px; }
+.settings-table { overflow-x: auto; }
+.settings-table table { width: 100%; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.settings-actions button { padding: 8px 10px; font-size: 12px; white-space: nowrap; }
+.settings-state { display: inline-flex; padding: 4px 9px; border-radius: 99px; background: #edf2f1; color: #596b67; font-size: 11px; font-weight: 800; }
+.settings-state.active { background: #e7f4f1; color: #0f766e; }
+.settings-role-search { margin-bottom: 18px; }
+.settings-role-list { display: grid; gap: 12px; }
+.settings-role-row { display: flex; align-items: center; gap: 15px; }
+.settings-role-icon { display: grid; place-items: center; padding: 0; }
+.settings-role-icon svg { width: 22px; }
+.settings-role-info { flex: 1; min-width: 0; }
+.settings-role-info h2 { margin: 0; text-transform: capitalize; font-size: 19px; }
+.settings-role-info p { margin: 4px 0 7px; color: #71817e; font-size: 13px; }
+.settings-permission-picker { max-height: 52vh; overflow-y: auto; padding-right: 4px; }
+.settings-permission-toolbar { position: sticky; top: 0; z-index: 1; background: white; padding-bottom: 12px; }
+.settings-permission-toolbar input { padding: 9px 12px; font-size: 14px; }
+.settings-permission-toolbar span { display: block; margin-top: 7px; color: #0f766e; font-size: 12px; font-weight: 800; }
+.settings-permission-group { padding: 14px 0; border-top: 1px solid #e5ecea; }
+.settings-permission-group > div:first-child { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.settings-permission-group h3 { margin: 0; font-size: 15px; }
+.settings-permission-group button { padding: 6px 9px; font-size: 11px; }
+.settings-permission-options { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; margin-top: 12px; }
+.settings-permission-options label { display: flex; align-items: flex-start; gap: 8px; padding: 9px; border: 1px solid #e5ecea; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.settings-permission-options input { flex: 0 0 auto; width: auto; margin-top: 2px; }
+.settings-permission-options small { display: block; color: #71817e; overflow-wrap: anywhere; }
+@media (max-width: 720px) { .settings-card-grid { grid-template-columns: 1fr; } .settings-heading, .settings-filters, .settings-role-row { align-items: stretch; flex-direction: column; } .settings-filters > div { width: 100%; } .settings-actions { width: 100%; } .settings-permission-options { grid-template-columns: 1fr; } .settings-search-row button { flex: 0 0 auto; } }
+@media (max-width: 720px) { .settings-table table, .settings-table tbody, .settings-table tr, .settings-table td { display: block; width: 100%; } .settings-table thead { display: none; } .settings-table tr { padding: 12px; border-bottom: 1px solid #e5ecea; } .settings-table td { padding: 5px 0; border: 0; overflow-wrap: anywhere; } .settings-table td::before { display: block; color: #71817e; font-size: 10px; font-weight: 800; text-transform: uppercase; } .settings-table td:nth-child(1)::before { content: 'Código'; } .settings-table td:nth-child(2)::before { content: 'Nombre'; } .settings-table td:nth-child(3)::before { content: 'Estado'; } .settings-table td:nth-child(4)::before { content: 'Creada'; } .settings-table td:nth-child(5)::before { content: 'Usuarios'; } .settings-table td:nth-child(6)::before { content: 'Acciones'; } }
+
 .client-excel-panel { padding: 24px; margin-bottom: 28px; }
 .client-excel-panel h2, .client-excel-history h2 { margin: 0 0 5px; color: #173d38; }
 .client-excel-panel > p { margin: 0 0 18px; color: #71817e; }

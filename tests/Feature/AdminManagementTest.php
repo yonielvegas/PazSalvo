@@ -49,10 +49,10 @@ class AdminManagementTest extends TestCase
         $agency = Agency::factory()->create();
         $actor = User::factory()->create(['agency_id' => $agency->id]);
         $manageUsers = Permission::create(['name' => 'administrar usuarios', 'guard_name' => 'web']);
-        $manageRoles = Permission::create(['name' => 'administrar roles', 'guard_name' => 'web']);
+        $manageRoles = Permission::create(['name' => 'settings.roles.permissions', 'guard_name' => 'web']);
         $consult = Permission::create(['name' => 'consultar paz y salvo', 'guard_name' => 'web']);
         $operator = Role::create(['name' => 'operador', 'guard_name' => 'web']);
-        $actor->givePermissionTo([$manageUsers, $manageRoles]);
+        $actor->givePermissionTo([$manageUsers, $manageRoles, Permission::create(['name' => 'settings.view', 'guard_name' => 'web'])]);
         $actor->assignRole($operator);
 
         $this->actingAs($actor)->post('/admin/users', [
@@ -75,7 +75,7 @@ class AdminManagementTest extends TestCase
         $this->actingAs($actor)->patch("/admin/users/{$user->id}/toggle")->assertRedirect();
         $this->assertDatabaseHas('users', ['id' => $user->id, 'name' => 'Usuario Editado', 'email' => 'editado@aaud.gob.pa', 'is_active' => false]);
 
-        $this->actingAs($actor)->put("/admin/roles/{$operator->id}/permissions", ['permissions' => [$consult->name]])->assertRedirect();
+        $this->actingAs($actor)->put("/settings/roles/{$operator->id}/permissions", ['permissions' => [$consult->name]])->assertRedirect();
         $this->assertTrue($operator->fresh()->hasPermissionTo($consult));
     }
 

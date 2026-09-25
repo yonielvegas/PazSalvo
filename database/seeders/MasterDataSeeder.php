@@ -11,6 +11,12 @@ class MasterDataSeeder extends Seeder
 {
     use WithoutModelEvents;
 
+    public const SETTINGS_PERMISSIONS = [
+        'settings.view',
+        'settings.agencies.view', 'settings.agencies.create', 'settings.agencies.update', 'settings.agencies.disable',
+        'settings.roles.view', 'settings.roles.create', 'settings.roles.update', 'settings.roles.permissions', 'settings.roles.disable',
+    ];
+
     /**
      * Idempotent authorization catalog. This seeder creates no users or agencies.
      */
@@ -28,6 +34,7 @@ class MasterDataSeeder extends Seeder
             'clients-excel.view',
             'clients-excel.download',
             'clients-excel.delete',
+            ...self::SETTINGS_PERMISSIONS,
         ];
 
         $models = collect($permissions)->mapWithKeys(
@@ -35,22 +42,22 @@ class MasterDataSeeder extends Seeder
         );
 
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web'])
-            ->syncPermissions($models->values());
+            ->givePermissionTo($models->values());
         Role::firstOrCreate(['name' => 'supervisor', 'guard_name' => 'web'])
-            ->syncPermissions($models->only([
+            ->givePermissionTo($models->only([
                 'consultar paz y salvo', 'generar paz y salvo', 'ver historial',
                 'ver detalle paz y salvo', 'anular paz y salvo',
             ])->values());
         Role::firstOrCreate(['name' => 'operador', 'guard_name' => 'web'])
-            ->syncPermissions($models->only([
+            ->givePermissionTo($models->only([
                 'consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo',
             ])->values());
         Role::firstOrCreate(['name' => 'consulta', 'guard_name' => 'web'])
-            ->syncPermissions($models->only([
+            ->givePermissionTo($models->only([
                 'consultar paz y salvo', 'ver historial', 'ver detalle paz y salvo',
             ])->values());
         Role::firstOrCreate(['name' => 'administrador_general', 'guard_name' => 'web'])
-            ->syncPermissions($models->only([
+            ->givePermissionTo($models->only([
                 'consultar paz y salvo', 'generar paz y salvo', 'ver historial', 'ver detalle paz y salvo',
             ])->values());
     }

@@ -1,5 +1,5 @@
 import { Form, Link, usePage } from '@inertiajs/react';
-import { Building2, FileSpreadsheet, History, LogOut, Search, ShieldCheck, Users } from 'lucide-react';
+import { Building2, FileSpreadsheet, History, LogOut, Search, Settings, Users } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 
 type Auth = { user: null | { name: string; agency: { name: string } | null; permissions: string[] } };
@@ -12,9 +12,9 @@ export function AppLayout({ children }: PropsWithChildren) {
             <nav>
                 <Link href="/paz-salvos/consultar"><Search /> Consultar</Link>
                 {auth.user?.permissions.includes('ver historial') && <Link href="/paz-salvos"><History /> Historial</Link>}
-                {auth.user?.permissions.includes('clients-excel.view') && <Link href="/admin/clients-excel"><FileSpreadsheet /> Excel de Clientes</Link>}
                 {auth.user?.permissions.includes('administrar usuarios') && <Link href="/admin/users"><Users /> Usuarios</Link>}
-                {auth.user?.permissions.includes('administrar roles') && <Link href="/admin/roles"><ShieldCheck /> Roles</Link>}
+                {auth.user?.permissions.includes('settings.view') && <Link href="/settings"><Settings /> Configuración</Link>}
+                {auth.user?.permissions.includes('clients-excel.view') && <Link href="/admin/clients-excel"><FileSpreadsheet /> Excel de Clientes</Link>}
             </nav>
             <div className="user-menu"><span><b>{auth.user?.name}</b><small>{auth.user?.agency?.name}</small></span><Form action="/logout" method="post"><button title="Cerrar sesión"><LogOut /></button></Form></div>
         </header>

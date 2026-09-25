@@ -8,6 +8,8 @@ use App\Http\Controllers\InstitutionalAccessController;
 use App\Http\Controllers\PazSalvoController;
 use App\Http\Controllers\PazSalvoHistoryController;
 use App\Http\Controllers\RolePermissionController;
+use App\Http\Controllers\SettingsAgencyController;
+use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 
@@ -47,6 +49,17 @@ Route::middleware(['auth', 'single.session', 'idle.timeout', 'internal.network',
     Route::patch('/admin/users/{user}/reset-password', [AdminUserController::class, 'resetPassword'])->middleware('permission:administrar usuarios')->name('admin.users.reset-password');
     Route::get('/admin/users/{user}/signature', [AdminUserController::class, 'signature'])->middleware('permission:administrar usuarios')->name('admin.users.signature');
 
-    Route::get('/admin/roles', [RolePermissionController::class, 'index'])->middleware('permission:administrar roles')->name('admin.roles.index');
-    Route::put('/admin/roles/{role}/permissions', [RolePermissionController::class, 'update'])->middleware('permission:administrar roles')->name('admin.roles.permissions.update');
+    Route::middleware('permission:settings.view')->group(function () {
+        Route::get('/settings', SettingsController::class)->name('settings.index');
+        Route::get('/settings/agencies', [SettingsAgencyController::class, 'index'])->middleware('permission:settings.agencies.view')->name('settings.agencies.index');
+        Route::post('/settings/agencies', [SettingsAgencyController::class, 'store'])->middleware('permission:settings.agencies.create')->name('settings.agencies.store');
+        Route::put('/settings/agencies/{agency}', [SettingsAgencyController::class, 'update'])->middleware('permission:settings.agencies.update')->name('settings.agencies.update');
+        Route::patch('/settings/agencies/{agency}/toggle', [SettingsAgencyController::class, 'toggle'])->middleware('permission:settings.agencies.disable')->name('settings.agencies.toggle');
+        Route::get('/settings/roles', [RolePermissionController::class, 'index'])->middleware('permission:settings.roles.view')->name('settings.roles.index');
+        Route::post('/settings/roles', [RolePermissionController::class, 'store'])->middleware('permission:settings.roles.create')->name('settings.roles.store');
+        Route::put('/settings/roles/{role}', [RolePermissionController::class, 'update'])->middleware('permission:settings.roles.update')->name('settings.roles.update');
+        Route::put('/settings/roles/{role}/permissions', [RolePermissionController::class, 'permissions'])->middleware('permission:settings.roles.permissions')->name('settings.roles.permissions');
+        Route::patch('/settings/roles/{role}/toggle', [RolePermissionController::class, 'toggle'])->middleware('permission:settings.roles.disable')->name('settings.roles.toggle');
+        Route::redirect('/admin/roles', '/settings/roles')->middleware('permission:settings.roles.view');
+    });
 });

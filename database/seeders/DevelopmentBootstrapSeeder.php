@@ -23,19 +23,19 @@ class DevelopmentBootstrapSeeder extends Seeder
         }
 
         $temporaryPassword = (string) (config('seeding.temporary_password') ?: Str::password(24));
-        $allowedAgencyNames = ['PH Multiplaza', 'Los Andes', 'La Gran Estacion', 'Villa Lucre', 'San Miguelito'];
+        $allowedAgencyNames = array_column(AgencyCatalog::AGENCIES, 'name');
 
-        $testAgencies = [
-            ['name' => 'PH Multiplaza', 'code' => 'PH-MULTIPLAZA', 'users' => ['multiplaza1@aaud.gob.pa', 'multiplaza2@aaud.gob.pa']],
-            ['name' => 'Los Andes', 'code' => 'LOS-ANDES', 'users' => ['losandes1@aaud.gob.pa', 'losandes2@aaud.gob.pa']],
-            ['name' => 'La Gran Estacion', 'code' => 'GRAN-ESTACION', 'users' => ['granestacion1@aaud.gob.pa', 'granestacion2@aaud.gob.pa']],
-            ['name' => 'Villa Lucre', 'code' => 'VILLA-LUCRE', 'users' => ['villalucre1@aaud.gob.pa', 'villalucre2@aaud.gob.pa']],
-            ['name' => 'San Miguelito', 'code' => 'SAN-MIGUELITO', 'users' => ['sanmiguelito1@aaud.gob.pa', 'sanmiguelito2@aaud.gob.pa']],
+        $usersByCode = [
+            'PH-MULTIPLAZA' => ['multiplaza1@aaud.gob.pa', 'multiplaza2@aaud.gob.pa'],
+            'LOS-ANDES' => ['losandes1@aaud.gob.pa', 'losandes2@aaud.gob.pa'],
+            'GRAN-ESTACION' => ['granestacion1@aaud.gob.pa', 'granestacion2@aaud.gob.pa'],
+            'VILLA-LUCRE' => ['villalucre1@aaud.gob.pa', 'villalucre2@aaud.gob.pa'],
+            'SAN-MIGUELITO' => ['sanmiguelito1@aaud.gob.pa', 'sanmiguelito2@aaud.gob.pa'],
         ];
 
         $adminAgency = null;
 
-        foreach ($testAgencies as $agencyData) {
+        foreach (AgencyCatalog::AGENCIES as $agencyData) {
             $agency = Agency::firstOrCreate(
                 ['name' => $agencyData['name']],
                 ['code' => $agencyData['code'], 'is_active' => true]
@@ -43,7 +43,7 @@ class DevelopmentBootstrapSeeder extends Seeder
             $agency->update(['code' => $agencyData['code'], 'is_active' => true]);
             $adminAgency ??= $agency;
 
-            foreach ($agencyData['users'] as $email) {
+            foreach ($usersByCode[$agencyData['code']] as $email) {
                 $user = User::firstOrCreate(
                     ['email' => $email],
                     [

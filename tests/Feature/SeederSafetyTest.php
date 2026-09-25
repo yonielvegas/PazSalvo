@@ -25,7 +25,7 @@ class SeederSafetyTest extends TestCase
         $seeder->run();
 
         $this->assertSame(5, $roleCount);
-        $this->assertSame(11, $permissionCount);
+        $this->assertSame(21, $permissionCount);
         $this->assertSame($roleCount, Role::count());
         $this->assertSame($permissionCount, Permission::count());
         $this->assertSame(0, User::count());

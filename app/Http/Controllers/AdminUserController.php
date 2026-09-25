@@ -56,7 +56,7 @@ class AdminUserController extends Controller
                 ];
             }),
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'roles' => Role::orderBy('name')->pluck('name'),
+            'roles' => Role::where('is_active', true)->orderBy('name')->pluck('name'),
             'temporary_password' => $this->temporaryPassword(),
         ]);
     }
@@ -67,8 +67,8 @@ class AdminUserController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'agency_id' => ['required', 'exists:agencies,id'],
-            'role' => ['required', 'exists:roles,name'],
+            'agency_id' => ['required', Rule::exists('agencies', 'id')->where('is_active', true)],
+            'role' => ['required', Rule::exists('roles', 'name')->where('is_active', true)],
             'is_active' => ['boolean'],
             'general_admin_signature' => ['required_if:role,administrador_general', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
@@ -153,14 +153,17 @@ class AdminUserController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
-            'agency_id' => ['required', 'exists:agencies,id'],
-            'role' => ['required', 'exists:roles,name'],
+            'agency_id' => ['required', Rule::exists('agencies', 'id')->where('is_active', true)],
+            'role' => ['required', Rule::exists('roles', 'name')->where('is_active', true)],
             'is_active' => ['boolean'],
             'general_admin_signature' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
         $oldState = ['email' => $user->email, 'roles' => $user->getRoleNames()->all(), 'is_active' => $user->is_active];
         $newRole = $data['role'];
+        if ($user->is_active && $user->hasRole('admin') && ($newRole !== 'admin' || array_key_exists('is_active', $data) && ! $data['is_active']) && $this->isLastActiveAdmin($user)) {
+            return back()->withErrors(['role' => 'Debe permanecer al menos un administrador activo.']);
+        }
         $wasGeneralAdmin = $user->hasRole('administrador_general');
         $isGeneralAdmin = $newRole === 'administrador_general';
         $hasActiveGeneralAdminSignature = $user->activeGeneralAdminSignature()->exists();
@@ -255,6 +258,9 @@ class AdminUserController extends Controller
         }
 
         $isActivating = ! $user->is_active;
+        if (! $isActivating && $user->hasRole('admin') && $this->isLastActiveAdmin($user)) {
+            return back()->withErrors(['user' => 'Debe permanecer al menos un administrador activo.']);
+        }
 
         if ($isActivating && $user->isGeneralAdmin()) {
             if (! $user->generalAdminSignatures()->exists()) {
@@ -418,6 +424,9 @@ class AdminUserController extends Controller
     public function destroy(User $user): RedirectResponse
     {
         Gate::authorize('manage-users');
+        if ($user->is_active && $user->hasRole('admin') && $this->isLastActiveAdmin($user)) {
+            return back()->withErrors(['user' => 'Debe permanecer al menos un administrador activo.']);
+        }
         if ($user->generatedPazSalvos()->exists()) {
             return back()->withErrors(['user' => 'No se puede borrar un usuario con certificados generados.']);
         }
@@ -439,5 +448,10 @@ class AdminUserController extends Controller
         }
 
         return $temporaryPassword;
+    }
+
+    private function isLastActiveAdmin(User $user): bool
+    {
+        return ! User::role('admin')->where('is_active', true)->whereKeyNot($user->id)->exists();
     }
 }

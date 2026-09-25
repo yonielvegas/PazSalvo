@@ -79,6 +79,11 @@ jobs:
         run: php artisan test --filter=CertificateDocumentTest
       - name: Test suite
         run: php artisan test
+      - name: Production bootstrap smoke test
+        run: |
+          php artisan migrate --force
+          php artisan db:seed --class=ProductionBootstrapSeeder --force
+          php artisan db:seed --class=ProductionBootstrapSeeder --force
       - name: Browser E2E
         env:
           SESSION_DRIVER: file

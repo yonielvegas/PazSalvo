@@ -21,7 +21,7 @@ class EnsureSingleActiveSession
             return $this->logout($request, 'Su usuario fue desactivado. Contacte a un administrador.', 'session.inactive_user');
         }
 
-        if (! $user->roles()->exists()) {
+        if (! $user->roles()->where('is_active', true)->exists()) {
             return $this->logout($request, $user::NO_ROLE_LOGIN_MESSAGE, 'session.no_role');
         }
 

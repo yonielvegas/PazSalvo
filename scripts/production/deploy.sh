@@ -75,6 +75,10 @@ elif [[ -e "$current" ]]; then
   exit 1
 fi
 
+# Additive schema changes and safe master data are prepared before activation.
+"${php[@]}" artisan migrate --force --no-interaction
+"${php[@]}" artisan db:seed --class=ProductionBootstrapSeeder --force --no-interaction
+
 activate_and_validate "$base" "$target" "$previous" "$expected_sha" "$target/.release-ready"
 
 # Keep active, immediate predecessor, and newest remaining valid release.
