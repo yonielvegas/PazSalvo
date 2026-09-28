@@ -164,6 +164,7 @@ class ReleaseValidationTest(unittest.TestCase):
         with patch.object(validator, "get", side_effect=self.responses(sha="b" * 40)):
             with self.assertRaisesRegex(ValueError, "SHA mismatch"):
                 validator.smoke(self.release, SHA, "legacy-rollback")
+
         with patch.object(validator, "get", side_effect=self.responses(include_release=False, login_status=403)):
             with self.assertRaises(urllib.error.HTTPError):
                 validator.smoke(self.release, SHA, "legacy-rollback")
@@ -175,6 +176,15 @@ class ReleaseValidationTest(unittest.TestCase):
         with patch.object(validator, "get", side_effect=self.responses(include_release=False, asset_status=404)):
             with self.assertRaises(urllib.error.HTTPError):
                 validator.smoke(self.release, SHA, "legacy-rollback")
+
+    def test_stale_worker_sha_reports_expected_and_served_in_both_modes(self):
+        old_sha = "b" * 40
+        for mode in ("strict", "legacy-rollback"):
+            with self.subTest(mode=mode), patch.object(
+                validator, "get", side_effect=self.responses(sha=old_sha)
+            ):
+                with self.assertRaisesRegex(ValueError, f"expected {SHA}, served {old_sha}"):
+                    validator.smoke(self.release, SHA, mode)
 
     def test_old_html_fails_even_with_absolute_same_site_urls(self):
         html = ('<script src="http://pazysalvo.aaud.gob.pa/build/assets/app-old.js"></script>'

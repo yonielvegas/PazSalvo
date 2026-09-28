@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 20
     env:
       EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+      PHP_FPM_SERVICE: ${{ vars.PHP_FPM_SERVICE || 'php8.3-fpm' }}
     steps:
       - name: Download artifact from successful CI run
         uses: actions/download-artifact@v4

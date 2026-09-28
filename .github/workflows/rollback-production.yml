@@ -21,6 +21,8 @@ jobs:
     runs-on: [self-hosted, production, pazsalvo]
     environment: production
     timeout-minutes: 10
+    env:
+      PHP_FPM_SERVICE: ${{ vars.PHP_FPM_SERVICE || 'php8.3-fpm' }}
     steps:
       - uses: actions/checkout@v4
         with:

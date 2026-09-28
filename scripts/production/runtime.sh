@@ -3,18 +3,29 @@
 runtime_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 preflight_php_fpm() {
-  sudo -n -l /usr/bin/systemctl reload php8.4-fpm >/dev/null || {
-    echo 'pazsalvo-deploy cannot reload php8.4-fpm without a password' >&2
+  # Multiple PHP versions can be running. Select the service serving this vhost,
+  # rather than guessing from the CLI version or the list of active services.
+  [[ "${PHP_FPM_SERVICE:-}" =~ ^php[0-9]+\.[0-9]+-fpm$ ]] || {
+    echo 'Set PHP_FPM_SERVICE to the PHP-FPM service serving this application.' >&2
+    return 1
+  }
+  php_fpm_active || {
+    echo "Configured PHP-FPM service is not active: $PHP_FPM_SERVICE" >&2
+    return 1
+  }
+  sudo -n -l /usr/bin/systemctl reload "$PHP_FPM_SERVICE" >/dev/null || {
+    echo "pazsalvo-deploy cannot reload $PHP_FPM_SERVICE without a password" >&2
     return 1
   }
 }
 
 reload_php_fpm() {
-  sudo -n /usr/bin/systemctl reload php8.4-fpm
+  echo "Reloading $PHP_FPM_SERVICE for current release"
+  sudo -n /usr/bin/systemctl reload "$PHP_FPM_SERVICE"
 }
 
 php_fpm_active() {
-  /usr/bin/systemctl is-active --quiet php8.4-fpm
+  /usr/bin/systemctl is-active --quiet "$PHP_FPM_SERVICE"
 }
 
 switch_current() {

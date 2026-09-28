@@ -111,7 +111,8 @@ def smoke(release, expected_sha, mode="strict"):
         health = json.loads(get("/healthz"))
         require(health.get("status") == "ok", "Health check is degraded")
         if "release" in health:
-            require(health["release"] == expected_sha, "Served release SHA mismatch")
+            require(health["release"] == expected_sha,
+                    f"Served release SHA mismatch: expected {expected_sha}, served {health['release']}")
         else:
             require(mode == "legacy-rollback", "Served release SHA missing")
 
