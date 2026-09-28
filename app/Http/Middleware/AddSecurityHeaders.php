@@ -17,10 +17,16 @@ class AddSecurityHeaders
         $headers->set('X-Frame-Options', 'DENY');
         $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-        $headers->set('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'");
+        if (! $request->is('verificar', 'verificar/*', 'validar-paz-salvo')) {
+            $headers->set('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'");
+        }
 
         if (app()->environment('production') && $request->isSecure()) {
             $headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        }
+
+        if ($request->is('verificar', 'verificar/*', 'validar-paz-salvo')) {
+            $headers->set('Cache-Control', 'no-store, private');
         }
 
         if ($request->user()) {

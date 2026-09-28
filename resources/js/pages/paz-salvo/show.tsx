@@ -2,7 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { Copy, Download, FileText } from 'lucide-react';
 import { AppLayout } from '@/components/app-layout';
 
-type Doc = { id:number; folio:string; numero_factura:string|null; public_verification_url:string; status:string; effective_status:string; client_number:string; holder_name:string; full_address:string; total_balance:string; issued_at:string; expires_at:string; agency_name:string; generated_by_name:string; authorized_by_name:string|null; cancelled_at:string|null; cancel_reason:string|null; cancelled_by?:{name:string}|null };
+type Doc = { pdf_available:boolean; id:number; folio:string; numero_factura:string|null; public_verification_url:string; status:string; effective_status:string; client_number:string; holder_name:string; full_address:string; total_balance:string; issued_at:string; expires_at:string; agency_name:string; generated_by_name:string; authorized_by_name:string|null; cancelled_at:string|null; cancel_reason:string|null; cancelled_by?:{name:string}|null };
 
 export default function Show({ document:d }: {document:Doc}) {
     const { flash } = usePage<{flash:{message?:string}}>().props;
@@ -59,10 +59,11 @@ export default function Show({ document:d }: {document:Doc}) {
                         <h2 className="text-xl font-semibold tracking-[-0.03em] text-[#173d38]">Acciones rapidas</h2>
                         <p className="mt-2 text-sm text-[#667773]">Abre, descarga o comparte la validacion publica del documento.</p>
                         <div className="mt-5 flex flex-col gap-3">
-                            {d.status !== 'error' && <>
+                            {d.pdf_available && <>
                                 <a className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0f766e] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0b625c]" href={`/paz-salvos/${d.id}/pdf`} target="_blank" rel="noreferrer"><FileText className="h-4 w-4" /> Ver PDF</a>
                                 <a className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#134e4a] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#0f3f3b]" href={`/paz-salvos/${d.id}/download`}><Download className="h-4 w-4" /> Descargar PDF</a>
                             </>}
+                            {!d.pdf_available && <p role="alert" className="text-sm text-[#991b1b]">El PDF del certificado no está disponible. Contacte al administrador.</p>}
                             <button className="min-h-12 rounded-xl border border-[#b9cbc7] bg-white px-5 py-3 text-sm font-bold text-[#173d38] shadow-sm transition hover:-translate-y-0.5 hover:border-[#0f766e] hover:bg-[#f3fbf8]" onClick={() => navigator.clipboard.writeText(publicUrl)}><Copy className="h-4 w-4" /> Copiar validacion</button>
                         </div>
                     </div>

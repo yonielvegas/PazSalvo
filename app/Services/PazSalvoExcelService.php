@@ -26,7 +26,7 @@ class PazSalvoExcelService
             }
         }
 
-        $relative = trim(config('paz-salvo.output_dir'), '/').'/'.$data['issued_at']->format('Y/m').'/paz_salvo_'.$data['client_number'].'_'.$data['folio'].'.xlsx';
+        $relative = trim(config('paz-salvo.output_dir'), '/').'/'.$data['issued_at']->format('Y/m').'/paz_salvo_'.$data['client_number'].'_'.$data['folio'].'_'.bin2hex(random_bytes(6)).'.xlsx';
         $disk->makeDirectory(dirname($relative));
 
         $selloPath = null;
@@ -155,7 +155,7 @@ class PazSalvoExcelService
 
             // ── SELLO: square PNG image aligned with signature block ──
             $selloSize = 253;
-            $selloPath = tempnam(sys_get_temp_dir(), 'sello_').'.png';
+            $selloPath = tempnam(sys_get_temp_dir(), 'sello_');
             $this->createSelloImage($selloPath, $selloSize);
             $this->image($selloPath, $sheet, 'H18', $selloSize);
 
@@ -182,6 +182,7 @@ class PazSalvoExcelService
 
             return $relative;
         } catch (\Throwable $e) {
+            $disk->delete($relative);
             Log::error('Falló la generación del certificado XLSX.', ['folio' => $data['folio'], 'error' => $e->getMessage()]);
             throw new ExcelLookupException('No se pudo generar el Excel del paz y salvo.', previous: $e);
         } finally {
@@ -231,7 +232,7 @@ class PazSalvoExcelService
                 return null;
             }
             imagefilter($srcImg, IMG_FILTER_GRAYSCALE);
-            $tmp = tempnam(sys_get_temp_dir(), 'logo_bw_').'.png';
+            $tmp = tempnam(sys_get_temp_dir(), 'logo_bw_');
             imagepng($srcImg, $tmp);
             imagedestroy($srcImg);
 

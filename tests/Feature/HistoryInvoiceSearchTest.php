@@ -8,6 +8,8 @@ use App\Models\GeneralAdminSignature;
 use App\Models\PazSalvo;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -328,5 +330,41 @@ class HistoryInvoiceSearchTest extends TestCase
                 ->where('documents.data.0.id', $document->id)
                 ->where('documents.data.0.numero_factura', '888888')
             );
+    }
+
+    public function test_history_excludes_technical_records_without_deleting_them(): void
+    {
+        $valid = $this->document(['status' => PazSalvo::GENERATED]);
+        $this->document(['status' => PazSalvo::CANCELLED]);
+        $failed = $this->document(['status' => PazSalvo::ERROR]);
+        $this->document(['status' => PazSalvo::PROCESSING]);
+        $this->actingAs($this->historyUser())->get(route('paz-salvos.index'))
+            ->assertOk()->assertInertia(fn ($page) => $page->where('documents.total', 2));
+        $this->assertDatabaseHas('paz_salvos', ['id' => $failed->id, 'status' => PazSalvo::ERROR]);
+        $this->assertDatabaseHas('paz_salvos', ['id' => $valid->id, 'status' => PazSalvo::GENERATED]);
+    }
+
+    public function test_generated_detail_opens_with_correct_url_and_missing_pdf_warning(): void
+    {
+        Storage::fake('local');
+        config(['app.env' => 'production', 'paz_salvo.public_verification_base_url' => 'http://pazysalvo.aaud.gob.pa/verificar']);
+        $user = $this->historyUser();
+        foreach (['ver detalle paz y salvo', 'descargar paz y salvo'] as $name) {
+            Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+            $user->givePermissionTo($name);
+        }
+        $document = $this->document(['pdf_path' => 'generated/paz-salvos/missing.pdf']);
+        Log::spy();
+        $this->actingAs($user)->get(route('paz-salvos.show', $document))->assertOk()
+            ->assertInertia(fn ($page) => $page->where('document.pdf_available', false)
+                ->where('document.public_verification_url', 'http://pazysalvo.aaud.gob.pa/verificar/'.$document->verification_token));
+        $this->get(route('paz-salvo.pdf', $document))->assertNotFound();
+        Log::shouldHaveReceived('error')->with('Paz y Salvo PDF missing from storage.', \Mockery::on(fn ($context) => $context['paz_salvo_id'] === $document->id))->twice();
+
+        Storage::disk('local')->put($document->pdf_path, '%PDF-1.4');
+        $this->get(route('paz-salvos.show', $document))->assertOk()->assertInertia(fn ($page) => $page->where('document.pdf_available', true));
+        $this->get(route('paz-salvo.download', $document))->assertOk();
+        $document->update(['status' => PazSalvo::ERROR]);
+        $this->get(route('paz-salvos.show', $document))->assertNotFound();
     }
 }

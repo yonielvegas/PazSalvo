@@ -17,6 +17,7 @@ class PdfConversionService
             throw new PdfConversionException('No se encontró el archivo XLSX para convertir.');
         }
 
+        $pdfPath = preg_replace('/\.xlsx$/i', '.pdf', $xlsxPath);
         try {
             $outputDir = dirname($disk->path($xlsxPath));
             $profile = sys_get_temp_dir().'/libreoffice-'.bin2hex(random_bytes(8));
@@ -35,6 +36,7 @@ class PdfConversionService
 
             return $pdfPath;
         } catch (\Throwable $exception) {
+            $disk->delete($pdfPath);
             Log::error('Falló la conversión del paz y salvo a PDF.', [
                 'xlsx_path' => $xlsxPath,
                 'exception' => $exception->getMessage(),

@@ -8,6 +8,7 @@ use App\Models\PazSalvo;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -30,7 +31,7 @@ class PazSalvoService
     {
         if ($generationRequestId) {
             $existing = PazSalvo::where('generation_request_id', $generationRequestId)
-                ->whereIn('status', [PazSalvo::PROCESSING, PazSalvo::GENERATED])
+                ->where('status', PazSalvo::GENERATED)
                 ->first();
             if ($existing) {
                 ($this->audit ??= app(AuditLogger::class))->record('paz_salvo.reused_generation_request', [
@@ -86,82 +87,93 @@ class PazSalvoService
         $expiresAt = $issuedAt->copy()->addDays(30);
         $token = (string) Str::uuid();
 
-        $record = DB::transaction(function () use ($user, $clientNumber, $numeroFactura, $account, $aseoBalance, $holder, $district, $corregimiento, $city, $address, $issuedAt, $expiresAt, $token, $generalAdminSignatureId, $generationRequestId) {
-            if ($generationRequestId) {
-                $existing = PazSalvo::where('generation_request_id', $generationRequestId)->lockForUpdate()->first();
-                if ($existing) {
-                    return $existing;
-                }
-            }
-            $sequence = $this->numbers->reserve((int) $issuedAt->format('Y'));
-            $client = Client::updateOrCreate(
-                ['client_number' => $clientNumber],
-                [
-                    'holder_name' => $holder,
-                    'rate' => $account['rate'] ?? null,
-                    'district' => $district,
-                    'corregimiento' => $corregimiento,
-                    'city' => $city,
-                    'address' => $address,
-                ]
-            );
-
-            return PazSalvo::create([
-                'sequence_number' => $sequence['number'], 'sequence_year' => $sequence['year'], 'folio' => $sequence['folio'],
-                'verification_token' => $token, 'generation_request_id' => $generationRequestId, 'client_id' => $client->id, 'generated_by' => $user->id, 'agency_id' => $user->agency->id,
-                'general_admin_signature_id' => $generalAdminSignatureId,
-                'total_balance' => $aseoBalance,
-                'numero_factura' => $numeroFactura,
-                'issued_at' => $issuedAt, 'expires_at' => $expiresAt, 'status' => PazSalvo::PROCESSING,
-            ]);
-        });
-
         $temporaryPaths = [];
         $pdfPath = null;
         try {
-            $record->load(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
-            if ($record->status === PazSalvo::GENERATED && $record->pdf_path) {
-                return $record;
-            }
-            $verificationUrl = ($this->verificationUrlBuilder ??= app(PublicVerificationUrlBuilder::class))->build($record->verification_token);
-            $temporaryPaths[] = $qrPath = $this->qr->generate($verificationUrl, $record->folio);
-            $documentData = [
-                'folio' => $record->folio,
-                'verification_token' => $record->verification_token,
-                'client_number' => $record->client->client_number,
-                'holder_name' => $record->client->holder_name,
-                'rate' => $record->client->rate,
-                'full_address' => $record->client->full_address,
-                'balance_total' => $record->total_balance,
-                'issued_at' => $record->issued_at->timezone('America/Panama'),
-                'expires_at' => $record->expires_at->timezone('America/Panama'),
-                'agency_name' => $record->agency->name,
-                'generated_by_name' => $record->generatedBy->name,
-                'authorized_by_name' => $authorizedByName,
-                'authorized_signature_path' => $authorizedSignaturePath,
-                'legal_text' => config('paz-salvo.legal_text'),
-            ];
-            $temporaryPaths[] = $xlsxPath = $this->excel->generate($documentData, $qrPath);
-            $pdfPath = $this->pdf->convertXlsxToPdf($xlsxPath);
-            $disk = Storage::disk(config('paz-salvo.disk'));
-            if (! $disk->exists($pdfPath) || $disk->size($pdfPath) < 100) {
-                throw new \RuntimeException('El PDF generado no es válido.');
-            }
+            return DB::transaction(function () use ($user, $clientNumber, $numeroFactura, $account, $aseoBalance, $holder, $district, $corregimiento, $city, $address, $issuedAt, $expiresAt, $token, $generalAdminSignatureId, $generationRequestId, $authorizedByName, $authorizedSignaturePath, &$temporaryPaths, &$pdfPath) {
+                // Serialize the whole generation, including the idempotency check.
+                $this->numbers->lockYear((int) $issuedAt->format('Y'));
+                if ($generationRequestId) {
+                    $existing = PazSalvo::where('generation_request_id', $generationRequestId)->first();
+                    if ($existing) {
+                        if ($existing->status !== PazSalvo::GENERATED || ! $existing->pdf_path) {
+                            throw ValidationException::withMessages(['generation' => 'La solicitud corresponde a un registro histórico incompleto. Consulte nuevamente.']);
+                        }
 
-            $record->update(['pdf_path' => $pdfPath, 'status' => PazSalvo::GENERATED]);
-            $disk->delete($temporaryPaths);
-            ($this->audit ??= app(AuditLogger::class))->record('paz_salvo.generated', [
-                'folio' => $record->folio,
-                'numero_factura' => $record->numero_factura,
-                'agency_id' => $record->agency_id,
-                'agency' => $record->agency->name,
-                'generated_by' => $record->generated_by,
-            ], $record);
+                        return $existing->fresh(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
+                    }
+                }
+                $sequence = $this->numbers->reserve((int) $issuedAt->format('Y'));
+                $client = Client::updateOrCreate(
+                    ['client_number' => $clientNumber],
+                    [
+                        'holder_name' => $holder,
+                        'rate' => $account['rate'] ?? null,
+                        'district' => $district,
+                        'corregimiento' => $corregimiento,
+                        'city' => $city,
+                        'address' => $address,
+                    ]
+                );
 
-            return $record->fresh(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
+                $record = new PazSalvo([
+                    'sequence_number' => $sequence['number'], 'sequence_year' => $sequence['year'], 'folio' => $sequence['folio'],
+                    'verification_token' => $token, 'generation_request_id' => $generationRequestId, 'client_id' => $client->id, 'generated_by' => $user->id, 'agency_id' => $user->agency->id,
+                    'general_admin_signature_id' => $generalAdminSignatureId,
+                    'total_balance' => $aseoBalance,
+                    'numero_factura' => $numeroFactura,
+                    'issued_at' => $issuedAt, 'expires_at' => $expiresAt, 'status' => PazSalvo::PROCESSING,
+                ]);
+                $record->load(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
+                $verificationUrl = ($this->verificationUrlBuilder ??= app(PublicVerificationUrlBuilder::class))->build($record->verification_token);
+                $temporaryPaths[] = $qrPath = $this->qr->generate($verificationUrl, $record->folio);
+                $documentData = [
+                    'folio' => $record->folio,
+                    'verification_token' => $record->verification_token,
+                    'client_number' => $record->client->client_number,
+                    'holder_name' => $record->client->holder_name,
+                    'rate' => $record->client->rate,
+                    'full_address' => $record->client->full_address,
+                    'balance_total' => $record->total_balance,
+                    'issued_at' => $record->issued_at->timezone('America/Panama'),
+                    'expires_at' => $record->expires_at->timezone('America/Panama'),
+                    'agency_name' => $record->agency->name,
+                    'generated_by_name' => $record->generatedBy->name,
+                    'authorized_by_name' => $authorizedByName,
+                    'authorized_signature_path' => $authorizedSignaturePath,
+                    'legal_text' => config('paz-salvo.legal_text'),
+                ];
+                $temporaryPaths[] = $xlsxPath = $this->excel->generate($documentData, $qrPath);
+                // Conversion can write a partial PDF before throwing, without returning its path.
+                $pdfPath = preg_replace('/\.xlsx$/i', '.pdf', $xlsxPath);
+                $pdfPath = $this->pdf->convertXlsxToPdf($xlsxPath);
+                $disk = Storage::disk(config('paz-salvo.disk'));
+                if (! $disk->exists($pdfPath) || $disk->size($pdfPath) < 100) {
+                    throw new \RuntimeException('El PDF generado no es válido.');
+                }
+
+                $record->fill(['pdf_path' => $pdfPath, 'status' => PazSalvo::GENERATED]);
+                if (! $record->saveOrFail()) {
+                    throw new \RuntimeException('No se pudo guardar el certificado.');
+                }
+                if ($temporaryPaths !== [] && ! $disk->delete($temporaryPaths)) {
+                    throw new \RuntimeException('No se pudieron eliminar los archivos temporales del certificado.');
+                }
+                ($this->audit ??= app(AuditLogger::class))->record('paz_salvo.generated', [
+                    'folio' => $record->folio,
+                    'numero_factura' => $record->numero_factura,
+                    'agency_id' => $record->agency_id,
+                    'agency' => $record->agency->name,
+                    'generated_by' => $record->generated_by,
+                ], $record);
+
+                return $record->fresh(['client', 'generatedBy', 'agency', 'generalAdminSignature.user']);
+            });
         } catch (\Throwable $e) {
-            Storage::disk(config('paz-salvo.disk'))->delete(array_filter([...$temporaryPaths, $pdfPath]));
-            $record->update(['status' => PazSalvo::ERROR, 'pdf_path' => null, 'generation_error' => Str::limit($e->getMessage(), 1000)]);
+            $paths = array_values(array_filter([...$temporaryPaths, $pdfPath]));
+            if ($paths !== [] && ! Storage::disk(config('paz-salvo.disk'))->delete($paths)) {
+                Log::error('Failed to clean certificate files after rollback.', ['paths' => $paths]);
+            }
             throw $e;
         }
     }

@@ -21,4 +21,18 @@ class CertificateNumberServiceTest extends TestCase
         $this->assertSame('CC-000002-2026', $second['folio']);
         $this->assertSame('CC-000001-2027', $nextYear['folio']);
     }
+
+    public function test_reservation_requires_transaction_and_rolls_back_to_previous_value(): void
+    {
+        $service = app(CertificateNumberService::class);
+        DB::transaction(fn () => $service->reserve(2026));
+        try {
+            DB::transaction(function () use ($service) {
+                $this->assertSame(2, $service->reserve(2026)['number']);
+                throw new \RuntimeException('generation failed');
+            });
+        } catch (\RuntimeException) {
+        }
+        $this->assertSame(2, DB::transaction(fn () => $service->reserve(2026))['number']);
+    }
 }

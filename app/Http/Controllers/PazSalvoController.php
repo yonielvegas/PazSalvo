@@ -132,7 +132,7 @@ class PazSalvoController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return $this->backToGenerationResult($request, ['generation' => 'No se pudo generar el certificado. El folio reservado quedó registrado como error.']);
+            return $this->backToGenerationResult($request, ['generation' => 'No se pudo generar el certificado. No se emitió ningún Paz y Salvo. Intente nuevamente.']);
         }
         $request->session()->forget(['paz_salvo_query', 'paz_salvo_result']);
 
@@ -157,7 +157,10 @@ class PazSalvoController extends Controller
     {
         abort_unless(in_array($document->status, [PazSalvo::GENERATED, PazSalvo::CANCELLED], true) && $document->pdf_path, 404);
         $disk = Storage::disk(config('paz-salvo.disk'));
-        abort_unless($disk->exists($document->pdf_path), 404);
+        if (! $disk->exists($document->pdf_path)) {
+            Log::error('Paz y Salvo PDF missing from storage.', ['paz_salvo_id' => $document->id, 'folio' => $document->folio]);
+            abort(404, 'El PDF del certificado no está disponible. Contacte al administrador.');
+        }
 
         return $disk->path($document->pdf_path);
     }

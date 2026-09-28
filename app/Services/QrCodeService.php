@@ -22,7 +22,14 @@ class QrCodeService
             errorCorrectionLevel: ErrorCorrectionLevel::High, size: 300, margin: 12,
             roundBlockSizeMode: RoundBlockSizeMode::Margin,
         ))->build();
-        $disk->put($path, $result->getString());
+        try {
+            if (! $disk->put($path, $result->getString())) {
+                throw new \RuntimeException('No se pudo almacenar el QR del certificado.');
+            }
+        } catch (\Throwable $exception) {
+            $disk->delete($path);
+            throw $exception;
+        }
 
         return $path;
     }

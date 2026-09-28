@@ -18,6 +18,10 @@ class PublicVerificationUrlBuilder
             throw new InvalidArgumentException('La URL pública de verificación no está configurada.');
         }
 
+        if (filter_var($baseUrl, FILTER_VALIDATE_URL) === false) {
+            throw new InvalidArgumentException('La URL pública de verificación no es válida.');
+        }
+
         $parts = parse_url($baseUrl);
         if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
             throw new InvalidArgumentException('La URL pública de verificación no es válida.');
@@ -28,12 +32,15 @@ class PublicVerificationUrlBuilder
             throw new InvalidArgumentException('La URL pública de verificación usa un esquema no permitido.');
         }
 
-        if (isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
+        if (isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment']) || isset($parts['query'])) {
             throw new InvalidArgumentException('La URL pública de verificación contiene componentes no permitidos.');
         }
 
-        if (config('app.env') === 'production' && $scheme === 'http' && ! str_ends_with(strtolower((string) $parts['host']), '.aaud.local')) {
-            throw new InvalidArgumentException('La URL pública de verificación por HTTP debe usar un host interno de AAUD en producción.');
+        $host = strtolower((string) $parts['host']);
+        if (config('app.env') === 'production' && $scheme === 'http'
+            && $host !== 'pazysalvo.aaud.gob.pa'
+            && ! str_ends_with($host, '.aaud.local')) {
+            throw new InvalidArgumentException('La URL pública de verificación por HTTP debe usar el dominio institucional autorizado o un host interno de AAUD en producción.');
         }
 
         $path = rtrim($parts['path'] ?? '', '/');
@@ -42,8 +49,7 @@ class PublicVerificationUrlBuilder
         }
 
         $port = isset($parts['port']) ? ':'.$parts['port'] : '';
-        $query = isset($parts['query']) ? '?'.$parts['query'] : '';
 
-        return "{$scheme}://{$parts['host']}{$port}{$path}/".rawurlencode($token).$query;
+        return "{$scheme}://{$parts['host']}{$port}{$path}/".rawurlencode($token);
     }
 }

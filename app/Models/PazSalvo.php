@@ -59,7 +59,7 @@ class PazSalvo extends Model
         if ($this->status === self::CANCELLED) {
             return 'cancelled';
         }
-        if ($this->status !== self::GENERATED) {
+        if ($this->status !== self::GENERATED || ! $this->expires_at) {
             return 'not_found';
         }
 

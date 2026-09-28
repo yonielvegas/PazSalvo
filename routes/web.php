@@ -7,11 +7,28 @@ use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\InstitutionalAccessController;
 use App\Http\Controllers\PazSalvoController;
 use App\Http\Controllers\PazSalvoHistoryController;
+use App\Http\Controllers\PublicPazSalvoController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\SettingsAgencyController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\PublicSecurityHeaders;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
+
+// Deliberately outside all institutional authentication/network/permission groups.
+Route::middleware(PublicSecurityHeaders::class)
+    ->withoutMiddleware(HandleInertiaRequests::class)
+    ->group(function () {
+        Route::get('/verificar', [PublicPazSalvoController::class, 'form'])->name('public.validate');
+        Route::get('/validar-paz-salvo', [PublicPazSalvoController::class, 'form']);
+        Route::post('/validar-paz-salvo', [PublicPazSalvoController::class, 'validateManual'])
+            ->middleware('throttle:public-manual-validation')->name('public.validate.submit');
+        Route::get('/verificar/{token}', [PublicPazSalvoController::class, 'verifyToken'])
+            ->middleware('throttle:public-qr-validation')->name('public.verify');
+        Route::get('/verificar/{token}/pdf', [PublicPazSalvoController::class, 'pdf'])
+            ->middleware('throttle:public-pdf')->name('public.verify.pdf');
+    });
 
 Route::get('/', InstitutionalAccessController::class)->name('institutional.access');
 Route::redirect('/acceso-institucional', '/');

@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,7 +31,7 @@ class PazSalvoHistoryController extends Controller
         ]);
         $filters = $this->normalizeFilters($filters);
 
-        $documents = PazSalvo::query()->with(['client:id,client_number,holder_name,district,corregimiento,city,address', 'generatedBy:id,name', 'agency:id,name'])
+        $documents = PazSalvo::query()->whereIn('status', [PazSalvo::GENERATED, PazSalvo::CANCELLED])->with(['client:id,client_number,holder_name,district,corregimiento,city,address', 'generatedBy:id,name', 'agency:id,name'])
             ->when($filters['folio'] ?? null, fn (Builder $q, string $v) => $q->where('folio', 'ilike', $this->like($v)))
             ->when($filters['nac'] ?? null, fn (Builder $q, string $v) => $q->whereHas('client', fn (Builder $q) => $q->where('client_number', $v)))
             ->when($filters['numero_factura'] ?? null, function (Builder $q, string $v): void {
@@ -95,8 +97,14 @@ class PazSalvoHistoryController extends Controller
     public function show(PazSalvo $pazSalvo, PublicVerificationUrlBuilder $urlBuilder): Response
     {
         Gate::authorize('view', $pazSalvo);
+        abort_unless(in_array($pazSalvo->status, [PazSalvo::GENERATED, PazSalvo::CANCELLED], true), 404);
+        $pdfAvailable = $pazSalvo->pdf_path && Storage::disk(config('paz-salvo.disk'))->exists($pazSalvo->pdf_path);
+        if (! $pdfAvailable) {
+            Log::error('Paz y Salvo PDF missing from storage.', ['paz_salvo_id' => $pazSalvo->id, 'folio' => $pazSalvo->folio]);
+        }
         $pazSalvo->load(['client', 'generatedBy:id,name', 'agency:id,name', 'generalAdminSignature.user:id,name', 'cancelledBy:id,name']);
         $document = [
+            'pdf_available' => (bool) $pdfAvailable,
             'id' => $pazSalvo->id,
             'folio' => $pazSalvo->folio,
             'numero_factura' => $pazSalvo->numero_factura,
