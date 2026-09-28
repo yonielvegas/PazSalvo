@@ -1,6 +1,7 @@
 """Exercise physical release identity with an isolated FPM, never system services."""
 
 import os
+import json
 import pwd
 import shutil
 import signal
@@ -22,7 +23,13 @@ def record(kind, body=b""):
 
 @unittest.skipUnless(FPM, "Isolated PHP 8.3-FPM binary not installed")
 class FpmReleaseTest(unittest.TestCase):
-    def test_cached_release_changes_only_after_fpm_reload_including_rollback(self):
+    def test_restart_replaces_cached_release_and_physical_dir_including_rollback(self):
+        self.exercise_transition(restart=True)
+
+    def test_completed_graceful_reload_also_refreshes_cache_in_local_fpm(self):
+        self.exercise_transition(restart=False)
+
+    def exercise_transition(self, *, restart):
         with tempfile.TemporaryDirectory(prefix="pazsalvo-fpm-") as directory:
             base = Path(directory)
             current = base / "current"
@@ -32,7 +39,12 @@ class FpmReleaseTest(unittest.TestCase):
                 controller = release / "app/Http/Controllers/HealthCheckController.php"
                 controller.parent.mkdir(parents=True)
                 # Use the exact release lookup performed by HealthCheckController.
-                controller.write_text("<?php echo trim(file_get_contents(dirname(__DIR__, 3).'/RELEASE_SHA'));\n")
+                controller.write_text("""<?php echo json_encode([
+                    'release' => trim(file_get_contents(dirname(__DIR__, 3).'/RELEASE_SHA')),
+                    'directory' => __DIR__, 'worker' => getmypid(),
+                    'opcache' => opcache_get_status(false),
+                ]);
+""")
                 (release / "RELEASE_SHA").write_text(name.lower() * 40)
                 (release / "public/index.php").write_text(
                     "<?php require __DIR__.'/../app/Http/Controllers/HealthCheckController.php';\n"
@@ -52,12 +64,46 @@ pm = static
 pm.max_children = 1
 php_admin_value[opcache.enable] = 1
 php_admin_value[opcache.validate_timestamps] = 0
+php_admin_value[opcache.revalidate_path] = 0
+; New fixture scripts must be cached immediately, without waiting for file age.
+php_admin_value[opcache.file_update_protection] = 0
 php_admin_value[realpath_cache_ttl] = 600
 """)
             command = [FPM, "--nodaemonize", "--fpm-config", str(config)]
             if os.getuid() == 0:
                 command.append("--allow-to-run-as-root")
-            process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            def start():
+                return subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            def stop(process):
+                if process.poll() is None:
+                    process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+
+            def renew(process):
+                if restart:
+                    old_master = process.pid
+                    stop(process)
+                    replacement = start()
+                    self.assertNotEqual(replacement.pid, old_master)
+                    return replacement
+                # Compare with an actually completed reload, not merely sending
+                # SIGUSR2 as ExecReload does. This avoids attributing persistent
+                # stale opcodes to reload if this FPM build does clear them.
+                log = base / "fpm.log"
+                ready_count = log.read_text().count("ready to handle connections")
+                process.send_signal(signal.SIGUSR2)
+                deadline = time.monotonic() + 5
+                while log.read_text().count("ready to handle connections") <= ready_count:
+                    if process.poll() is not None or time.monotonic() >= deadline:
+                        self.fail("Isolated graceful reload did not complete: " + log.read_text())
+                return process
+
+            process = start()
             try:
                 def fetch():
                     params = {"SCRIPT_FILENAME": str(current / "public/index.php"),
@@ -88,45 +134,48 @@ php_admin_value[realpath_cache_ttl] = 600
                             if kind == 6:
                                 output += body
                             if kind == 3:
-                                return output.split(b"\r\n\r\n", 1)[1].decode().strip()
+                                return json.loads(output.split(b"\r\n\r\n", 1)[1])
 
-                def await_sha(expected):
+                def first_ready_response():
+                    # Wait only for transport readiness, never for an expected SHA:
+                    # a stale successful response must fail the assertion immediately.
                     deadline = time.monotonic() + 5
-                    actual = None
                     while time.monotonic() < deadline:
                         if process.poll() is not None:
                             self.fail((base / "fpm.log").read_text())
                         try:
-                            actual = fetch()
-                            if actual == expected:
-                                return
+                            return fetch()
                         except (OSError, ConnectionError):
                             continue
-                    self.fail(f"Expected SHA {expected}, served {actual}")
+                    self.fail("Isolated FPM did not accept a FastCGI request")
 
-                await_sha("a" * 40)
+                def assert_release(response, name):
+                    self.assertEqual(response['release'], name.lower() * 40)
+                    self.assertEqual(response['directory'], str(base / name / 'app/Http/Controllers'))
+                    self.assertTrue(response['opcache']['opcache_enabled'])
+                    self.assertGreaterEqual(response['opcache']['opcache_statistics']['num_cached_scripts'], 2)
+
+                old_response = first_ready_response()
+                assert_release(old_response, "A")
                 replacement = base / ".current"
                 replacement.symlink_to(base / "B")
                 replacement.replace(current)
                 # Demonstrate stale physical __DIR__ despite current pointing to B.
                 self.assertEqual(current.resolve(), base / "B")
-                self.assertEqual(fetch(), "a" * 40)
-                # systemd's php8.3-fpm ExecReload sends this same graceful signal.
-                process.send_signal(signal.SIGUSR2)
-                await_sha("b" * 40)
+                assert_release(fetch(), "A")
+                process = renew(process)
+                new_response = first_ready_response()
+                assert_release(new_response, "B")
+                self.assertNotEqual(new_response['worker'], old_response['worker'])
                 replacement.symlink_to(base / "A")
                 replacement.replace(current)
-                self.assertEqual(fetch(), "b" * 40)
-                process.send_signal(signal.SIGUSR2)
-                await_sha("a" * 40)
+                assert_release(fetch(), "B")
+                process = renew(process)
+                restored_response = first_ready_response()
+                assert_release(restored_response, "A")
+                self.assertNotEqual(restored_response['worker'], new_response['worker'])
             finally:
-                if process.poll() is None:
-                    process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+                stop(process)
 
 
 if __name__ == "__main__":

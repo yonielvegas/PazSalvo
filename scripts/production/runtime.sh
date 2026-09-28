@@ -13,15 +13,17 @@ preflight_php_fpm() {
     echo "Configured PHP-FPM service is not active: $PHP_FPM_SERVICE" >&2
     return 1
   }
-  sudo -n -l /usr/bin/systemctl reload "$PHP_FPM_SERVICE" >/dev/null || {
-    echo "pazsalvo-deploy cannot reload $PHP_FPM_SERVICE without a password" >&2
+  sudo -n -l /usr/bin/systemctl restart "$PHP_FPM_SERVICE" >/dev/null || {
+    echo "pazsalvo-deploy cannot restart $PHP_FPM_SERVICE without a password" >&2
     return 1
   }
 }
 
-reload_php_fpm() {
-  echo "Reloading $PHP_FPM_SERVICE for current release"
-  sudo -n /usr/bin/systemctl reload "$PHP_FPM_SERVICE"
+renew_php_fpm() {
+  # ExecReload only signals FPM; restart waits for stop/start and replaces the
+  # master and workers, including their OPcache and realpath state.
+  echo "Restarting $PHP_FPM_SERVICE for current release"
+  sudo -n /usr/bin/systemctl restart "$PHP_FPM_SERVICE"
 }
 
 php_fpm_active() {
@@ -53,7 +55,7 @@ activate_and_validate() {
   local base="$1" target="$2" previous="$3" sha="$4" ready_marker="${5:-}" previous_sha=''
   preflight_php_fpm || return 1
   switch_current "$base" "${target##*/}" || return 1
-  if reload_php_fpm && php_fpm_active &&
+  if renew_php_fpm && php_fpm_active &&
     validate_served_release "$target" "$sha" &&
     { [[ -z "$ready_marker" ]] || touch -- "$ready_marker"; }; then
     echo "Validated active release ${target##*/} ($sha)"
@@ -72,8 +74,8 @@ activate_and_validate() {
     return 1
   fi
 
-  if ! reload_php_fpm || ! php_fpm_active; then
-    echo 'CRITICAL: PHP-FPM reload after restoring current failed.' >&2
+  if ! renew_php_fpm || ! php_fpm_active; then
+    echo 'CRITICAL: PHP-FPM restart after restoring current failed.' >&2
     return 1
   fi
   if [[ -n "$previous" ]]; then
