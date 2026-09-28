@@ -3,8 +3,10 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -113,10 +115,10 @@ class ReleaseValidationTest(unittest.TestCase):
     def test_asset_parser_accepts_only_same_site_relative_or_absolute_assets(self):
         for url in (
             self.js,
-            "http://pazsalvo.aaud.local" + self.js,
-            "https://pazsalvo.aaud.local" + self.js,
-            "http://pazsalvo.aaud.local:80" + self.js,
-            "https://pazsalvo.aaud.local:443" + self.js,
+            "http://pazysalvo.aaud.gob.pa" + self.js,
+            "https://pazysalvo.aaud.gob.pa" + self.js,
+            "http://pazysalvo.aaud.gob.pa:80" + self.js,
+            "https://pazysalvo.aaud.gob.pa:443" + self.js,
         ):
             with self.subTest(url=url):
                 parser = validator.AssetParser()
@@ -125,8 +127,9 @@ class ReleaseValidationTest(unittest.TestCase):
         for url in (
             "http://otro-host" + self.js,
             "//otro-host" + self.js,
-            "http://pazsalvo.aaud.local:8080" + self.js,
-            "ftp://pazsalvo.aaud.local" + self.js,
+            "http://pazsalvo.aaud.local" + self.js,
+            "http://pazysalvo.aaud.gob.pa:8080" + self.js,
+            "ftp://pazysalvo.aaud.gob.pa" + self.js,
         ):
             with self.subTest(url=url):
                 parser = validator.AssetParser()
@@ -135,8 +138,8 @@ class ReleaseValidationTest(unittest.TestCase):
 
     def test_smoke_accepts_absolute_same_site_assets_and_fetches_normalized_paths(self):
         for scheme in ("http", "https"):
-            html = (f'<script src="{scheme}://pazsalvo.aaud.local{self.js}"></script>'
-                    f'<link href="{scheme}://pazsalvo.aaud.local{self.css}" rel="stylesheet">')
+            html = (f'<script src="{scheme}://pazysalvo.aaud.gob.pa{self.js}"></script>'
+                    f'<link href="{scheme}://pazysalvo.aaud.gob.pa{self.css}" rel="stylesheet">')
             with self.subTest(scheme=scheme), patch.object(
                 validator, "get", side_effect=self.responses(html=html)
             ) as get:
@@ -174,8 +177,8 @@ class ReleaseValidationTest(unittest.TestCase):
                 validator.smoke(self.release, SHA, "legacy-rollback")
 
     def test_old_html_fails_even_with_absolute_same_site_urls(self):
-        html = ('<script src="http://pazsalvo.aaud.local/build/assets/app-old.js"></script>'
-                f'<link href="https://pazsalvo.aaud.local{self.css}" rel="stylesheet">')
+        html = ('<script src="http://pazysalvo.aaud.gob.pa/build/assets/app-old.js"></script>'
+                f'<link href="https://pazysalvo.aaud.gob.pa{self.css}" rel="stylesheet">')
         with patch.object(validator, "get", side_effect=self.responses(html=html)):
             with self.assertRaisesRegex(ValueError, "manifest entries"):
                 validator.smoke(self.release, SHA)
@@ -193,6 +196,62 @@ class ReleaseValidationTest(unittest.TestCase):
             with self.subTest(error=error), patch.object(validator, "get", side_effect=response):
                 with self.assertRaisesRegex(Exception, error):
                     validator.smoke(self.release, SHA)
+
+    def test_get_connects_to_loopback_with_real_virtual_host(self):
+        with patch.object(validator.urllib.request, "build_opener") as build_opener:
+            response = build_opener.return_value.open.return_value.__enter__.return_value
+            response.status = 200
+            response.read.return_value = b"ok"
+            self.assertEqual(validator.get("/login"), b"ok")
+            request = build_opener.return_value.open.call_args.args[0]
+            self.assertEqual(request.full_url, "http://127.0.0.1/login")
+            self.assertEqual(request.get_header("Host"), "pazysalvo.aaud.gob.pa")
+
+    def test_new_release_and_rollback_use_real_host_for_every_http_request(self):
+        requests = []
+        health = {}
+        html = (f'<script src="http://pazysalvo.aaud.gob.pa{self.js}"></script>'
+                f'<link href="http://pazysalvo.aaud.gob.pa{self.css}" rel="stylesheet">')
+
+        class VirtualHostHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                requests.append((self.path, self.headers.get("Host")))
+                if self.headers.get("Host") != "pazysalvo.aaud.gob.pa":
+                    self.send_response(400)
+                    self.end_headers()
+                    return
+                body = (json.dumps(health).encode() if self.path == "/healthz"
+                        else html.encode() if self.path == "/login" else b"asset")
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), VirtualHostHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            origin = f"http://127.0.0.1:{server.server_port}"
+            with patch.object(validator, "ORIGIN", origin):
+                for mode in ("strict", "legacy-rollback"):
+                    with self.subTest(mode=mode):
+                        requests.clear()
+                        health.clear()
+                        health["status"] = "ok"
+                        if mode == "strict":
+                            health["release"] = SHA
+                        validator.smoke(self.release, SHA, mode)
+                        self.assertEqual(requests, [
+                            (path, "pazysalvo.aaud.gob.pa")
+                            for path in ("/healthz", "/login", self.css, self.js, "/healthz")
+                        ])
+        finally:
+            server.shutdown()
+            thread.join()
+            server.server_close()
 
 
 if __name__ == "__main__":

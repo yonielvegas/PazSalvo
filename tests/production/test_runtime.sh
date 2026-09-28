@@ -11,6 +11,18 @@ printf '%040d\n' 1 > "$previous/RELEASE_SHA"
 printf '%040d\n' 2 > "$target/RELEASE_SHA"
 ln -s 'releases/20260925-140125-aaaaaaa' "$test_base/current"
 
+# Use the same validator script even when validating the restored predecessor.
+validator_calls=()
+python3() { validator_calls+=("$*"); }
+validate_served_release "$target" "$(<"$target/RELEASE_SHA")"
+validate_served_release "$previous" "$(<"$previous/RELEASE_SHA")"
+validate_served_release "$previous" "$(<"$previous/RELEASE_SHA")" legacy-rollback
+test "${#validator_calls[@]}" -eq 3
+test "${validator_calls[0]}" = "$runtime_dir/validate_release.py smoke $target $(<"$target/RELEASE_SHA") strict"
+test "${validator_calls[1]}" = "$runtime_dir/validate_release.py smoke $previous $(<"$previous/RELEASE_SHA") strict"
+test "${validator_calls[2]}" = "$runtime_dir/validate_release.py smoke $previous $(<"$previous/RELEASE_SHA") legacy-rollback"
+unset -f python3
+
 preflight_php_fpm() { [[ "${fail_preflight:-false}" != true ]]; }
 php_fpm_active() { return 0; }
 reload_count=0

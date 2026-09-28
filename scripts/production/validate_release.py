@@ -13,7 +13,7 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
-HOST = "pazsalvo.aaud.local"
+HOST = "pazysalvo.aaud.gob.pa"
 ORIGIN = "http://127.0.0.1"
 ENTRIES = ("resources/js/app.tsx", "resources/css/app.css")
 
