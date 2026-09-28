@@ -24,6 +24,6 @@ export default function Login() {
                 <button disabled={processing}><LogIn /> {processing ? 'Ingresando…' : 'Ingresar'}</button>
             </>}
         </Form>
-        <span className="login-watermark" aria-hidden="true">by: Yoel S.</span>
+        <span className="login-watermark" aria-hidden="true">by: Dept. Informatica</span>
     </section></div>;
 }
