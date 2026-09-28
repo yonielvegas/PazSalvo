@@ -1,24 +1,63 @@
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 
-type Fixture = { id: number; token: string; folio: string; date: string };
+type Fixture = {
+    id: number; token: string; folio: string; date: string; issued_at: string;
+    laravel_timezone: string; database_timezone: string;
+};
+test.use({ timezoneId: 'UTC' });
 let fixtures: Record<string, Fixture>;
 test.beforeAll(() => {
     fixtures = JSON.parse(execFileSync('php', ['tests/e2e/seed-public-verification.php'], { encoding: 'utf8' }));
 });
 
-test('consulta pública por folio y fecha sin login y con NAC enmascarado', async ({ page }) => {
-    await page.goto('/verificar');
-    await expect(page.getByRole('heading', { name: 'Validar Paz y Salvo' })).toBeVisible();
-    await page.getByLabel('Folio', { exact: true }).fill(fixtures.valid.folio.replace(/\D/g, ''));
-    await page.getByLabel('Fecha de emisión', { exact: true }).fill(fixtures.valid.date.replace(/\D/g, ''));
-    await page.getByRole('button', { name: 'Validar', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'CERTIFICADO VIGENTE' })).toBeVisible();
-    await expect(page.getByText('******4787', { exact: true })).toBeVisible();
-    await expect(page.getByText('DIRECCION PRIVADA E2E')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Ver PDF', exact: true })).toBeVisible();
-    expect((await page.request.get(`/verificar/${fixtures.valid.token}/pdf`)).status()).toBe(200);
-    await page.screenshot({ path: '/tmp/pazsalvo-public-result.png', fullPage: true });
+test('consulta pública por folio y fecha sin login y con NAC enmascarado', async ({ page }, testInfo) => {
+    let enteredDate: string | undefined;
+    let inputType: string | null | undefined;
+    let submittedData: { folio: string | null; fecha_emision: string | null } | undefined;
+    page.on('request', (request) => {
+        if (request.method() === 'POST' && new URL(request.url()).pathname === '/validar-paz-salvo') {
+            const fields = new URLSearchParams(request.postData() ?? '');
+            submittedData = { folio: fields.get('folio'), fecha_emision: fields.get('fecha_emision') };
+        }
+    });
+    try {
+        await page.goto('/verificar');
+        await expect(page.getByRole('heading', { name: 'Validar Paz y Salvo' })).toBeVisible();
+        const issuedDate = page.getByLabel('Fecha de emisión', { exact: true });
+        inputType = await issuedDate.getAttribute('type');
+        await expect(issuedDate).toHaveAttribute('type', 'text');
+        expect(fixtures.valid.issued_at).toBe('2026-09-15T10:30:00-05:00');
+        expect(fixtures.valid.date).toBe('15/09/2026');
+        const folio = page.getByLabel('Folio', { exact: true });
+        await folio.fill(fixtures.valid.folio.replace(/\D/g, ''));
+        await expect(folio).toHaveValue(fixtures.valid.folio);
+        await issuedDate.fill(fixtures.valid.date);
+        enteredDate = await issuedDate.inputValue();
+        await expect(issuedDate).toHaveValue(fixtures.valid.date);
+        await page.getByRole('button', { name: 'Validar', exact: true }).click();
+        expect(submittedData).toEqual({ folio: fixtures.valid.folio, fecha_emision: fixtures.valid.date });
+        await expect(page.getByRole('heading', { name: 'CERTIFICADO VIGENTE' })).toBeVisible();
+        await expect(page.getByText('******4787', { exact: true })).toBeVisible();
+        await expect(page.getByText('DIRECCION PRIVADA E2E')).toHaveCount(0);
+        await expect(page.getByRole('link', { name: 'Ver PDF', exact: true })).toBeVisible();
+        expect((await page.request.get(`/verificar/${fixtures.valid.token}/pdf`)).status()).toBe(200);
+        await page.screenshot({ path: '/tmp/pazsalvo-public-result.png', fullPage: true });
+    } catch (error) {
+        const diagnostic = {
+            fixture: fixtures.valid,
+            inputType,
+            enteredDate,
+            submittedData,
+            urlAfterSubmit: page.url(),
+            pageText: await page.locator('body').innerText(),
+        };
+        console.error('Public verification failure:', JSON.stringify(diagnostic, null, 2));
+        await testInfo.attach('public-verification-diagnostic', {
+            body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json',
+        });
+        throw error;
+    }
 });
 
 test('QR muestra vigente, expirado, anulado e inexistente sin sesión', async ({ page }) => {
