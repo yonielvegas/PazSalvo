@@ -8,6 +8,7 @@ use App\Models\GeneralAdminSignature;
 use App\Models\PazSalvo;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -342,6 +343,96 @@ class HistoryInvoiceSearchTest extends TestCase
             ->assertOk()->assertInertia(fn ($page) => $page->where('documents.total', 2));
         $this->assertDatabaseHas('paz_salvos', ['id' => $failed->id, 'status' => PazSalvo::ERROR]);
         $this->assertDatabaseHas('paz_salvos', ['id' => $valid->id, 'status' => PazSalvo::GENERATED]);
+    }
+
+    public function test_author_filter_uses_creator_id_and_keeps_global_statistics_independent(): void
+    {
+        Carbon::setTestNow('2026-10-08 12:00:00');
+        try {
+            $viewer = $this->historyUser();
+            $author = User::factory()->create(['name' => 'Autor buscado']);
+            $matching = $this->document(['generated_by' => $author->id, 'expires_at' => now()->addDay()]);
+            $this->document(['expires_at' => now()->subDay()]);
+            $this->document(['status' => PazSalvo::CANCELLED, 'expires_at' => now()->subDay()]);
+            $this->document(['status' => PazSalvo::ERROR]);
+
+            $this->actingAs($viewer)->get(route('paz-salvos.index', ['elaborado_por' => $author->id]))
+                ->assertOk()->assertInertia(fn ($page) => $page
+                ->where('documents.total', 1)->where('documents.data.0.id', $matching->id)
+                ->where('statistics.total', 1)->where('statistics.valid', 1)->where('statistics.expired', 0)
+                ->where('globalStatistics.total', 3)->where('globalStatistics.valid', 1)->where('globalStatistics.expired', 1));
+
+            $this->actingAs($viewer)->get(route('paz-salvos.index', ['elaborado_por' => $author->id, 'folio' => 'missing']))
+                ->assertInertia(fn ($page) => $page->where('documents.total', 0)->where('statistics.total', 0)
+                    ->where('globalStatistics.total', 3));
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_author_options_are_unique_prioritized_and_include_inactive_creators(): void
+    {
+        $viewer = $this->historyUser();
+        Role::firstOrCreate(['name' => 'supervisor', 'guard_name' => 'web']);
+        $operator = User::factory()->create(['name' => 'Zeta Operador', 'is_active' => false]);
+        $operator->assignRole(['operador', 'supervisor']);
+        $supervisor = User::factory()->create(['name' => 'Alfa Supervisor']);
+        $supervisor->assignRole('supervisor');
+        $other = User::factory()->create(['name' => 'Beta Otro']);
+        $other->assignRole(Role::firstOrCreate(['name' => 'consulta', 'guard_name' => 'web']));
+        foreach ([$other, $supervisor, $operator] as $author) {
+            $this->document(['generated_by' => $author->id]);
+        }
+
+        $this->actingAs($viewer)->get(route('paz-salvos.index'))->assertInertia(function ($page) use ($operator, $supervisor, $other) {
+            $authors = collect($page->toArray()['props']['authors']);
+            $this->assertSame([$operator->id, $supervisor->id, $other->id], $authors->pluck('id')->all());
+            $this->assertSame('operador', $authors->first()['role']);
+        });
+    }
+
+    public function test_issue_date_uses_panama_day_boundary_and_pagination_keeps_author(): void
+    {
+        $viewer = $this->historyUser();
+        $author = User::factory()->create();
+        $inside = $this->document(['generated_by' => $author->id, 'issued_at' => '2026-10-09 04:59:59+00']);
+        $this->document(['generated_by' => $author->id, 'issued_at' => '2026-10-09 05:00:00+00']);
+        $this->actingAs($viewer)->get(route('paz-salvos.index', [
+            'elaborado_por' => $author->id, 'fecha_desde' => '2026-10-08', 'fecha_hasta' => '2026-10-08',
+        ]))->assertInertia(fn ($page) => $page->where('documents.total', 1)->where('documents.data.0.id', $inside->id));
+
+        for ($i = 0; $i < 16; $i++) {
+            $this->document(['generated_by' => $author->id]);
+        }
+        $this->actingAs($viewer)->get(route('paz-salvos.index', ['elaborado_por' => $author->id]))
+            ->assertInertia(function ($page) use ($author) {
+                $this->assertSame(18, $page->toArray()['props']['statistics']['total']);
+                $this->assertStringContainsString('elaborado_por='.$author->id, $page->toArray()['props']['documents']['next_page_url']);
+            });
+    }
+
+    public function test_statistics_change_when_certificate_expires_without_cache(): void
+    {
+        $viewer = $this->historyUser();
+        Carbon::setTestNow('2026-10-08 12:00:00');
+        try {
+            $this->document(['expires_at' => now()->addSecond()]);
+            $this->actingAs($viewer)->get(route('paz-salvos.index'))
+                ->assertInertia(fn ($page) => $page->where('statistics.valid', 1)->where('statistics.expired', 0)
+                    ->where('globalStatistics.valid', 1));
+            Carbon::setTestNow('2026-10-08 12:00:02');
+            $this->actingAs($viewer)->get(route('paz-salvos.index'))
+                ->assertInertia(fn ($page) => $page->where('statistics.valid', 0)->where('statistics.expired', 1)
+                    ->where('globalStatistics.expired', 1));
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_unknown_author_is_rejected(): void
+    {
+        $this->actingAs($this->historyUser())->get(route('paz-salvos.index', ['elaborado_por' => 999999]))
+            ->assertSessionHasErrors('elaborado_por');
     }
 
     public function test_generated_detail_opens_with_correct_url_and_missing_pdf_warning(): void

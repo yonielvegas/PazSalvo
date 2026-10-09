@@ -42,7 +42,9 @@ test('consulta pública por folio y fecha sin login y con NAC enmascarado', asyn
         await expect(page.getByText('DIRECCION PRIVADA E2E')).toHaveCount(0);
         await expect(page.getByRole('link', { name: 'Ver PDF', exact: true })).toBeVisible();
         expect((await page.request.get(`/verificar/${fixtures.valid.token}/pdf`)).status()).toBe(200);
-        await page.screenshot({ path: '/tmp/pazsalvo-public-result.png', fullPage: true });
+        const screenshot = testInfo.outputPath('public-verification-result.png');
+        await page.screenshot({ path: screenshot, fullPage: true });
+        await testInfo.attach('public-verification-result', { path: screenshot, contentType: 'image/png' });
     } catch (error) {
         const diagnostic = {
             fixture: fixtures.valid,
@@ -78,7 +80,7 @@ test('QR muestra vigente, expirado, anulado e inexistente sin sesión', async ({
     await expect(page.getByRole('heading', { name: 'Certificado no encontrado' })).toBeVisible();
 });
 
-test('consulta inexistente conserva el mensaje y la página funciona en móvil', async ({ page }) => {
+test('consulta inexistente conserva el mensaje y la página funciona en móvil', async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/verificar');
     await page.getByLabel('Folio', { exact: true }).fill('0000002026');
@@ -88,7 +90,9 @@ test('consulta inexistente conserva el mensaje y la página funciona en móvil',
     await page.getByRole('button', { name: 'Aceptar', exact: true }).click();
     await expect(page.getByRole('alertdialog')).toBeHidden();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: '/tmp/pazsalvo-public-mobile.png', fullPage: true });
+    const screenshot = testInfo.outputPath('public-verification-mobile.png');
+    await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach('public-verification-mobile', { path: screenshot, contentType: 'image/png' });
 });
 
 test('historial omite errores antiguos y el detalle maneja PDF faltante', async ({ page }) => {

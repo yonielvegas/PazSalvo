@@ -1,22 +1,38 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { Eye, Filter, Loader2, SearchX, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/app-layout';
 
 type Doc = { id:number; folio:string; numero_factura:string|null; client_number:string; holder_name:string; agency_name:string; generated_by_name:string; issued_at:string; expires_at:string; status:string; effective_status:string };
 type Page<T> = { data:T[]; links:{url:string|null;label:string;active:boolean}[]; from:number|null; to:number|null; total:number };
-type Filters = { folio?: string; nac?: string; numero_factura?: string; titular?: string; fecha_desde?: string; fecha_hasta?: string };
+type Filters = { folio?: string; nac?: string; numero_factura?: string; titular?: string; elaborado_por?: string; fecha_desde?: string; fecha_hasta?: string };
+type Statistics = { total:number; expired:number; valid:number };
+type Author = { id:number; name:string; role:string|null };
 
-const emptyFilters: Required<Filters> = { folio: '', nac: '', numero_factura: '', titular: '', fecha_desde: '', fecha_hasta: '' };
+const emptyFilters: Required<Filters> = { folio: '', nac: '', numero_factura: '', titular: '', elaborado_por: '', fecha_desde: '', fecha_hasta: '' };
 
-export default function History({ documents, filters }: { documents:Page<Doc>; filters:Filters }) {
+export default function History({ documents, filters, statistics, authors, todayPanama }: { documents:Page<Doc>; filters:Filters; statistics:Statistics; authors:Author[]; todayPanama:string }) {
     const [values, setValues] = useState({ ...emptyFilters, ...filters });
     const [loading, setLoading] = useState(false);
+    const [authorSearch, setAuthorSearch] = useState('');
+    const [authorOpen, setAuthorOpen] = useState(false);
+    const [selectedQuick, setSelectedQuick] = useState<'today'|'month'|'year'|null>(null);
+    const [requestError, setRequestError] = useState('');
+    const requestId = useRef(0);
+    const editedDuringVisit = useRef(false);
 
-    useEffect(() => setValues({ ...emptyFilters, ...filters }), [filters]);
+    useEffect(() => { if (!editedDuringVisit.current) setValues({ ...emptyFilters, ...filters }); }, [filters]);
 
     const activeFilters = useMemo(() => Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''), [filters]);
     const hasActiveFilters = activeFilters.length > 0;
+    const quickRanges = {
+        today: { fecha_desde: todayPanama, fecha_hasta: todayPanama },
+        month: { fecha_desde: `${todayPanama.slice(0, 7)}-01`, fecha_hasta: todayPanama },
+        year: { fecha_desde: `${todayPanama.slice(0, 4)}-01-01`, fecha_hasta: todayPanama },
+    };
+    const matchingRange = (key: keyof typeof quickRanges) => values.fecha_desde === quickRanges[key].fecha_desde && values.fecha_hasta === quickRanges[key].fecha_hasta;
+    const activeRange = selectedQuick && matchingRange(selectedQuick) ? selectedQuick : (Object.keys(quickRanges) as (keyof typeof quickRanges)[]).find(matchingRange);
+    const visibleAuthors = authors.filter((author) => `${author.name} ${author.id} ${author.role ?? ''}`.toLocaleLowerCase('es').includes(authorSearch.toLocaleLowerCase('es')));
     const dateRangeError = values.fecha_desde && values.fecha_hasta && values.fecha_desde > values.fecha_hasta
         ? 'La fecha desde no puede ser posterior a la fecha hasta.'
         : '';
@@ -43,6 +59,7 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
                         ? value.replace(/\s+/g, ' ').slice(0, 150)
                         : value;
 
+        editedDuringVisit.current = true;
         setValues((current) => ({ ...current, [field]: next }));
     };
 
@@ -53,12 +70,17 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
     );
 
     const visit = (payload: Filters) => {
+        const currentRequest = ++requestId.current;
+        editedDuringVisit.current = false;
+        router.cancelAll({ sync: true });
         setLoading(true);
+        setRequestError('');
         router.get('/paz-salvos', clean(payload), {
             preserveState: true,
             preserveScroll: true,
             replace: true,
-            onFinish: () => setLoading(false),
+            onError: () => { if (currentRequest === requestId.current) setRequestError('No se pudieron aplicar los filtros. Revise los datos e inténtelo de nuevo.'); },
+            onFinish: () => { if (currentRequest === requestId.current) setLoading(false); },
         });
     };
 
@@ -69,6 +91,7 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
     };
 
     const clearAll = () => {
+        setSelectedQuick(null);
         setValues(emptyFilters);
         visit(emptyFilters);
     };
@@ -82,9 +105,10 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
     const formatChip = (key: string, value: string) => {
         const labels: Record<string, string> = {
             folio: 'Folio',
-            nac: 'NAC',
+            nac: 'Número de Cliente',
             numero_factura: 'Factura',
             titular: 'Titular',
+            elaborado_por: 'Elaborado por',
             fecha_desde: 'Desde',
             fecha_hasta: 'Hasta',
         };
@@ -93,7 +117,7 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
             return `${labels[key]}: ${new Date(`${value}T00:00:00`).toLocaleDateString('es-PA')}`;
         }
 
-        return `${labels[key] ?? key}: ${value}`;
+        return `${labels[key] ?? key}: ${key === 'elaborado_por' ? (authors.find((author) => String(author.id) === value)?.name ?? value) : value}`;
     };
 
     return (
@@ -120,7 +144,7 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
                         <input id="history-folio" value={values.folio} onChange={(event) => setField('folio', event.target.value)} placeholder="CC-000008-2026" maxLength={30} />
                     </div>
                     <div className="history-filter-field">
-                        <label htmlFor="history-nac">NAC</label>
+                        <label htmlFor="history-nac">Número de Cliente</label>
                         <input id="history-nac" value={values.nac} onChange={(event) => setField('nac', event.target.value)} inputMode="numeric" pattern="[0-9]*" placeholder="610479" maxLength={30} />
                     </div>
                     <div className="history-filter-field">
@@ -131,6 +155,17 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
                         <label htmlFor="history-holder">Nombre del titular</label>
                         <input id="history-holder" value={values.titular} onChange={(event) => setField('titular', event.target.value)} placeholder="Nombre o apellido" maxLength={150} />
                     </div>
+                    <div className="history-filter-field history-author-field">
+                        <label htmlFor="history-author-search">Elaborado por (usuario)</label>
+                        <div className="history-author-picker" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setAuthorOpen(false); }}>
+                            <input id="history-author-search" role="combobox" aria-expanded={authorOpen} aria-controls="history-author-options" aria-autocomplete="list" value={authorOpen ? authorSearch : (authors.find((author) => String(author.id) === values.elaborado_por)?.name ?? 'Todos los usuarios')} onFocus={() => { setAuthorSearch(''); setAuthorOpen(true); }} onChange={(event) => { setAuthorSearch(event.target.value); setAuthorOpen(true); }} onKeyDown={(event) => { if (event.key === 'Escape') setAuthorOpen(false); if (event.key === 'ArrowDown') { event.preventDefault(); event.currentTarget.nextElementSibling?.querySelector('button')?.focus(); } }} placeholder="Buscar usuario" autoComplete="off" />
+                            {authorOpen && <div id="history-author-options" role="listbox" className="history-author-options">
+                                <button type="button" role="option" aria-selected={!values.elaborado_por} onClick={() => { setField('elaborado_por', ''); setAuthorOpen(false); }}>Todos los usuarios</button>
+                                {visibleAuthors.map((author) => <button type="button" role="option" aria-selected={String(author.id) === values.elaborado_por} key={author.id} onClick={() => { setField('elaborado_por', String(author.id)); setAuthorOpen(false); }}>{author.name} <small>{author.role}</small></button>)}
+                                {!visibleAuthors.length && <span>Sin usuarios coincidentes</span>}
+                            </div>}
+                        </div>
+                    </div>
                     <div className="history-filter-field">
                         <label htmlFor="history-from">Desde</label>
                         <input id="history-from" type="date" value={values.fecha_desde} onChange={(event) => setField('fecha_desde', event.target.value)} aria-invalid={Boolean(dateRangeError)} aria-describedby={dateRangeError ? 'history-date-error' : undefined} />
@@ -139,16 +174,20 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
                         <label htmlFor="history-to">Hasta</label>
                         <input id="history-to" type="date" value={values.fecha_hasta} onChange={(event) => setField('fecha_hasta', event.target.value)} aria-invalid={Boolean(dateRangeError)} aria-describedby={dateRangeError ? 'history-date-error' : undefined} />
                     </div>
+                    <div className="history-quick-dates" role="group" aria-label="Rangos rápidos de emisión">
+                        {([['today', 'Hoy'], ['month', 'Este mes'], ['year', 'Este año']] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={activeRange === key} onClick={() => { editedDuringVisit.current = true; setSelectedQuick(key); setValues((current) => ({ ...current, ...quickRanges[key] })); }}>{label}</button>)}
+                    </div>
 
                     {dateRangeError && <p id="history-date-error" className="field-error history-filter-error" role="alert">{dateRangeError}</p>}
 
                     <div className="history-filter-actions">
-                        <button type="button" className="btn-secondary" onClick={clearAll} disabled={!hasActiveFilters || loading}>Limpiar filtros</button>
+                        <button type="button" className="btn-secondary" onClick={clearAll} disabled={loading || (!hasActiveFilters && Object.values(values).every((value) => !value))}>Limpiar filtros</button>
                         <button type="submit" disabled={Boolean(dateRangeError) || loading}>
                             {loading ? <><Loader2 className="animate-spin" /> Buscando…</> : <><Filter /> Aplicar filtros</>}
                         </button>
                     </div>
                 </form>
+                {requestError && <p className="field-error" role="alert">{requestError}</p>}
 
                 {hasActiveFilters && (
                     <div className="active-filter-bar" aria-label="Filtros activos">
@@ -164,6 +203,11 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
             </section>
 
             <section className={`history-results ${loading ? 'is-loading' : ''}`} aria-live="polite" aria-busy={loading}>
+                <div className="history-kpis" aria-label="Indicadores del historial">
+                    <div><span>Total de Paz y Salvo</span><strong>{statistics.total}</strong></div>
+                    <div><span>Paz y Salvo vencidos</span><strong>{statistics.expired}</strong></div>
+                    <div><span>Paz y Salvo vigentes</span><strong>{statistics.valid}</strong></div>
+                </div>
                 {loading && (
                     <div className="history-skeleton" aria-hidden="true">
                         {Array.from({ length: 5 }).map((_, row) => <span key={row} />)}
@@ -172,8 +216,8 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
                 <div className="history-result-summary">{resultSummary}</div>
                 <div className="table-card history-table-card">
                     <table>
-                        <thead><tr><th>Folio</th><th>N° Factura</th><th>NAC / Cliente</th><th>Agencia</th><th>Elaborado por</th><th>Emisión</th><th>Estado</th><th /></tr></thead>
-                        <tbody>{documents.data.map((d) => <tr key={d.id}><td><b>{d.folio}</b></td><td>{d.numero_factura || '\u2014'}</td><td>{d.client_number}<small>{d.holder_name}</small></td><td>{d.agency_name}</td><td>{d.generated_by_name}</td><td>{new Date(d.issued_at).toLocaleString('es-PA')}</td><td><span className={`status ${d.effective_status}`}>{d.effective_status}</span></td><td><Link className="icon-link" href={`/paz-salvos/${d.id}`}><Eye /></Link></td></tr>)}</tbody>
+                        <thead><tr><th>Folio</th><th>N° Factura</th><th>Número de Cliente</th><th>Agencia</th><th>Elaborado por</th><th>Emisión</th><th>Estado</th><th /></tr></thead>
+                        <tbody>{documents.data.map((d) => <tr key={d.id}><td data-label="Folio"><b>{d.folio}</b></td><td data-label="N° Factura">{d.numero_factura || '\u2014'}</td><td data-label="Número de Cliente"><span>{d.client_number}<small>{d.holder_name}</small></span></td><td data-label="Agencia">{d.agency_name}</td><td data-label="Elaborado por">{d.generated_by_name}</td><td data-label="Emisión">{new Date(d.issued_at).toLocaleString('es-PA', { timeZone: 'America/Panama' })}</td><td data-label="Estado"><span className={`status ${d.effective_status}`}>{d.effective_status}</span></td><td><Link className="icon-link" href={`/paz-salvos/${d.id}`} aria-label={`Ver certificado ${d.folio}`}><Eye /></Link></td></tr>)}</tbody>
                     </table>
                 </div>
                 {!documents.data.length && (
@@ -186,7 +230,7 @@ export default function History({ documents, filters }: { documents:Page<Doc>; f
                 )}
             </section>
 
-            {documents.links.length > 3 && <div className="pagination">{documents.links.map((l, i) => l.url ? <Link key={i} href={l.url} preserveState preserveScroll onClick={() => setLoading(true)} className={l.active ? 'active' : ''}>{paginationLabel(l.label)}</Link> : <span key={i}>{paginationLabel(l.label)}</span>)}</div>}
+            {documents.links.length > 3 && <div className="pagination">{documents.links.map((l, i) => l.url ? <Link key={i} href={l.url} preserveState preserveScroll onStart={() => setLoading(true)} onFinish={() => setLoading(false)} className={l.active ? 'active' : ''}>{paginationLabel(l.label)}</Link> : <span key={i}>{paginationLabel(l.label)}</span>)}</div>}
         </AppLayout>
     );
 }

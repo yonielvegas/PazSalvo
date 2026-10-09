@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\PazSalvo;
+use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\PazSalvoStatistics;
 use App\Services\PublicVerificationUrlBuilder;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -13,12 +15,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class PazSalvoHistoryController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, PazSalvoStatistics $statistics): Response
     {
         Gate::authorize('viewAny', PazSalvo::class);
         $filters = $request->validate([
@@ -26,12 +29,13 @@ class PazSalvoHistoryController extends Controller
             'nac' => ['nullable', 'string', 'regex:/^\d+$/', 'max:30'],
             'numero_factura' => ['nullable', 'string', 'regex:/^\d{1,6}$/'],
             'titular' => ['nullable', 'string', 'max:150'],
+            'elaborado_por' => ['nullable', 'integer', 'exists:users,id'],
             'fecha_desde' => ['nullable', 'date_format:Y-m-d'],
             'fecha_hasta' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:fecha_desde'],
         ]);
         $filters = $this->normalizeFilters($filters);
 
-        $documents = PazSalvo::query()->whereIn('status', [PazSalvo::GENERATED, PazSalvo::CANCELLED])->with(['client:id,client_number,holder_name,district,corregimiento,city,address', 'generatedBy:id,name', 'agency:id,name'])
+        $query = PazSalvo::query()->whereIn('status', [PazSalvo::GENERATED, PazSalvo::CANCELLED])
             ->when($filters['folio'] ?? null, fn (Builder $q, string $v) => $q->where('folio', 'ilike', $this->like($v)))
             ->when($filters['nac'] ?? null, fn (Builder $q, string $v) => $q->whereHas('client', fn (Builder $q) => $q->where('client_number', $v)))
             ->when($filters['numero_factura'] ?? null, function (Builder $q, string $v): void {
@@ -40,9 +44,13 @@ class PazSalvoHistoryController extends Controller
                 $q->where('numero_factura', $operator, $v);
             })
             ->when($filters['titular'] ?? null, fn (Builder $q, string $v) => $q->whereHas('client', fn (Builder $q) => $q->where('holder_name', 'ilike', $this->like($v))))
+            ->when($filters['elaborado_por'] ?? null, fn (Builder $q, $v) => $q->where('generated_by', $v))
             ->when($filters['fecha_desde'] ?? null, fn (Builder $q, string $v) => $q->where('issued_at', '>=', Carbon::createFromFormat('Y-m-d', $v, 'America/Panama')->startOfDay()->utc()))
-            ->when($filters['fecha_hasta'] ?? null, fn (Builder $q, string $v) => $q->where('issued_at', '<', Carbon::createFromFormat('Y-m-d', $v, 'America/Panama')->addDay()->startOfDay()->utc()))
-            ->latest('issued_at')->paginate(15)->withQueryString()->through(function (PazSalvo $document) {
+            ->when($filters['fecha_hasta'] ?? null, fn (Builder $q, string $v) => $q->where('issued_at', '<', Carbon::createFromFormat('Y-m-d', $v, 'America/Panama')->addDay()->startOfDay()->utc()));
+
+        $filteredStatistics = $statistics->count(clone $query);
+        $documents = $query->with(['client:id,client_number,holder_name,district,corregimiento,city,address', 'generatedBy:id,name', 'agency:id,name'])
+            ->latest('issued_at')->latest('id')->paginate(15)->withQueryString()->through(function (PazSalvo $document) {
                 return [
                     'id' => $document->id,
                     'folio' => $document->folio,
@@ -59,7 +67,16 @@ class PazSalvoHistoryController extends Controller
             });
 
         return Inertia::render('paz-salvo/history', [
-            'documents' => $documents, 'filters' => $filters,
+            'documents' => $documents, 'filters' => $filters, 'statistics' => $filteredStatistics,
+            'todayPanama' => now('America/Panama')->toDateString(),
+            'authors' => User::query()->whereHas('generatedPazSalvos', fn (Builder $q) => $q->whereIn('status', [PazSalvo::GENERATED, PazSalvo::CANCELLED]))
+                ->with('roles:id,name')->get(['id', 'name'])->map(function (User $user) {
+                    $roles = $user->roles->pluck('name');
+                    $priority = $roles->contains('operador') ? 0 : ($roles->contains('supervisor') ? 1 : 2);
+
+                    return ['id' => $user->id, 'name' => $user->name, 'role' => $priority === 0 ? 'operador' : ($priority === 1 ? 'supervisor' : $roles->sort()->first()), 'priority' => $priority];
+                })->sort(fn (array $a, array $b) => ($a['priority'] <=> $b['priority']) ?: strcasecmp(Str::ascii($a['name']), Str::ascii($b['name'])))->values()
+                ->map(fn (array $author) => collect($author)->except('priority')->all()),
         ]);
     }
 
@@ -84,6 +101,10 @@ class PazSalvoHistoryController extends Controller
             if (($filters[$key] ?? null) === '' || ($filters[$key] ?? null) === null) {
                 unset($filters[$key]);
             }
+        }
+
+        if (empty($filters['elaborado_por'])) {
+            unset($filters['elaborado_por']);
         }
 
         return $filters;
