@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\PazSalvoStatistics;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -13,7 +14,7 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user()?->loadMissing('agency');
 
-        return [...parent::share($request), 'auth' => ['user' => $user ? [
+        return [...parent::share($request), 'globalStatistics' => fn () => $user?->can('ver historial') ? app(PazSalvoStatistics::class)->global() : null, 'auth' => ['user' => $user ? [
             'id' => $user->id, 'name' => $user->name, 'email' => $user->email,
             'agency' => $user->agency?->only(['id', 'name']), 'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),

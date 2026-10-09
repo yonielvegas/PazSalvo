@@ -17,8 +17,13 @@
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
-/playwright-report
-/test-results
+# Evidencias y reportes temporales de Playwright. Las imágenes institucionales
+# permanecen versionadas: estas reglas solo cubren directorios de resultados.
+/playwright-report/
+/test-results/
+/blob-report/
+/docs/history/screenshots/
+/docs/navbar/screenshots/
 /public/storage
 /storage/*.key
 /storage/pail

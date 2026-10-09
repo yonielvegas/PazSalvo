@@ -8,6 +8,7 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Role;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -57,5 +58,40 @@ foreach (['valid', 'expired', 'cancelled', 'error', 'missing_pdf'] as $index => 
         'issued_at' => $document->issued_at->timezone('America/Panama')->toIso8601String(),
         'laravel_timezone' => config('app.timezone'), 'database_timezone' => $databaseTimezone,
     ];
+}
+foreach ([
+    ['key' => 'operator', 'name' => 'Zeta Operador E2E', 'role' => 'operador', 'number' => 910001],
+    ['key' => 'supervisor', 'name' => 'Alfa Supervisor E2E', 'role' => 'supervisor', 'number' => 910002],
+    ['key' => 'other', 'name' => 'Beta Consulta E2E', 'role' => 'consulta', 'number' => 910003],
+] as $author) {
+    $creator = User::firstOrCreate(['email' => $author['key'].'-history-e2e@aaud.gob.pa'], [
+        'name' => $author['name'], 'agency_id' => $user->agency_id, 'password' => $user->password,
+        'is_active' => $author['key'] !== 'operator',
+    ]);
+    $creator->syncRoles([Role::findByName($author['role'], 'web')]);
+    $token = sprintf('550e8400-e29b-41d4-a716-%012d', $author['number']);
+    $folio = sprintf('CC-%06d-2026', $author['number']);
+    DB::table('paz_salvos')->updateOrInsert(['verification_token' => $token], [
+        'sequence_number' => $author['number'], 'sequence_year' => 2026, 'folio' => $folio,
+        'client_id' => $client->id, 'generated_by' => $creator->id, 'agency_id' => $user->agency_id,
+        'general_admin_signature_id' => $signature->id, 'numero_factura' => '654321', 'total_balance' => 0,
+        'issued_at' => $issuedAt->toIso8601String(), 'expires_at' => $validUntil->toIso8601String(),
+        'status' => PazSalvo::GENERATED, 'created_at' => $issuedAt->toIso8601String(),
+        'updated_at' => $issuedAt->toIso8601String(),
+    ]);
+    $fixtures[$author['key']] = ['id' => PazSalvo::where('verification_token', $token)->value('id'), 'folio' => $folio];
+}
+for ($number = 0; $number < 16; $number++) {
+    $sequence = 920001 + $number;
+    $token = sprintf('550e8400-e29b-41d4-a716-%012d', $sequence);
+    DB::table('paz_salvos')->updateOrInsert(['verification_token' => $token], [
+        'sequence_number' => $sequence, 'sequence_year' => 2026,
+        'folio' => sprintf('CC-%06d-2026', $sequence), 'client_id' => $client->id,
+        'generated_by' => $user->id, 'agency_id' => $user->agency_id,
+        'general_admin_signature_id' => $signature->id, 'numero_factura' => '777777', 'total_balance' => 0,
+        'issued_at' => Carbon::parse('2026-08-01 10:00:00', 'America/Panama')->toIso8601String(),
+        'expires_at' => $validUntil->toIso8601String(), 'status' => PazSalvo::GENERATED,
+        'created_at' => $issuedAt->toIso8601String(), 'updated_at' => $issuedAt->toIso8601String(),
+    ]);
 }
 echo json_encode($fixtures, JSON_THROW_ON_ERROR);

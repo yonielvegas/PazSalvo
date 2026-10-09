@@ -112,7 +112,7 @@ export function InvoiceNumberModal({ queryToken, onClose }: { queryToken: string
                                 type="text"
                                 inputMode="numeric"
                                 pattern="[0-9]*"
-                                placeholder="000000"
+                                placeholder="Introduzca el Numero de la factura ejem: 000000"
                                 maxLength={6}
                                 value={numeroFactura}
                                 onChange={handleInputChange}
