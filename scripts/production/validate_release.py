@@ -2,19 +2,19 @@
 """Validate a prepared release and the response actually served by Apache/PHP-FPM."""
 
 import grp
+import http.client
 import json
 import os
 import re
+import ssl
 import stat
 import sys
-import urllib.error
-import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 HOST = "pazysalvo.aaud.gob.pa"
-ORIGIN = "http://127.0.0.1"
+ORIGIN = "https://127.0.0.1"
 ENTRIES = ("resources/js/app.tsx", "resources/css/app.css")
 
 
@@ -90,16 +90,44 @@ class AssetParser(HTMLParser):
                 self.assets.add(url.path)
 
 
-def get(path):
-    request = urllib.request.Request(ORIGIN + path, headers={"Host": HOST, "Cache-Control": "no-cache"})
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, request, fp, code, msg, headers, new_url):
-            return None
+def ssl_context():
+    """Trust store used to verify the institutional TLS certificate."""
+    return ssl.create_default_context()
 
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    with opener.open(request, timeout=10) as response:
-        require(response.status == 200, f"HTTP {response.status}: {path}")
-        return response.read()
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Reach the loopback origin while presenting HOST for SNI and certificate checks."""
+
+    def __init__(self, connect_host, port, server_hostname, context, timeout):
+        super().__init__(connect_host, port, timeout=timeout, context=context)
+        self._server_hostname = server_hostname
+
+    def connect(self):
+        http.client.HTTPConnection.connect(self)
+        self.sock = self._context.wrap_socket(self.sock, server_hostname=self._server_hostname)
+
+
+def _send(path, host, origin, timeout):
+    parts = urlsplit(origin)
+    require(parts.scheme == "https", "Release validation must use HTTPS")
+    require(parts.hostname is not None, "Release validation origin is missing a host")
+    connection = PinnedHTTPSConnection(parts.hostname, parts.port or 443, host, ssl_context(), timeout)
+    try:
+        connection.request("GET", path, headers={"Host": host, "Cache-Control": "no-cache"})
+        response = connection.getresponse()
+        return response.status, response.getheader("Location"), response.read()
+    finally:
+        connection.close()
+
+
+def get(path):
+    status, location, body = _send(path, HOST, ORIGIN, timeout=10)
+    if 300 <= status < 400:
+        destination = location or "unknown"
+        reason = "redirects to login" if location and "/login" in location else "unexpected redirect"
+        raise ValueError(f"HTTP {status} for {path} ({reason}); Location: {destination}")
+    require(status == 200, f"HTTP {status}: {path}")
+    return body
 
 
 def smoke(release, expected_sha, mode="strict"):
@@ -136,6 +164,6 @@ if __name__ == "__main__":
             smoke(Path(sys.argv[2]), sys.argv[3], sys.argv[4] if len(sys.argv) == 5 else "strict")
         else:
             raise ValueError("Usage: validate_release.py preflight RELEASE SHARED | smoke RELEASE SHA [strict|legacy-rollback]")
-    except (ValueError, OSError, KeyError, json.JSONDecodeError, urllib.error.URLError) as error:
+    except (ValueError, OSError, KeyError, json.JSONDecodeError, http.client.HTTPException) as error:
         print(f"Release validation failed: {error}", file=sys.stderr)
         sys.exit(1)

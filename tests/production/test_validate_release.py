@@ -1,6 +1,9 @@
 import importlib.util
 import json
 import os
+import shutil
+import ssl
+import subprocess
 import sys
 import tempfile
 import threading
@@ -207,32 +210,34 @@ class ReleaseValidationTest(unittest.TestCase):
                 with self.assertRaisesRegex(Exception, error):
                     validator.smoke(self.release, SHA)
 
-    def test_get_connects_to_loopback_with_real_virtual_host(self):
-        with patch.object(validator.urllib.request, "build_opener") as build_opener:
-            response = build_opener.return_value.open.return_value.__enter__.return_value
-            response.status = 200
-            response.read.return_value = b"ok"
-            self.assertEqual(validator.get("/login"), b"ok")
-            request = build_opener.return_value.open.call_args.args[0]
-            self.assertEqual(request.full_url, "http://127.0.0.1/login")
-            self.assertEqual(request.get_header("Host"), "pazysalvo.aaud.gob.pa")
+    def _certificate(self):
+        cert = Path(self.temp.name) / "server.crt"
+        key = Path(self.temp.name) / "server.key"
+        if not cert.exists():
+            subprocess.run([
+                "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                "-keyout", str(key), "-out", str(cert), "-days", "2",
+                "-subj", f"/CN={validator.HOST}",
+                "-addext", f"subjectAltName=DNS:{validator.HOST}",
+            ], check=True, capture_output=True)
+        return cert, key
 
-    def test_new_release_and_rollback_use_real_host_for_every_http_request(self):
-        requests = []
-        health = {}
-        html = (f'<script src="http://pazysalvo.aaud.gob.pa{self.js}"></script>'
-                f'<link href="http://pazysalvo.aaud.gob.pa{self.css}" rel="stylesheet">')
+    def _trusted_context(self, cert):
+        return lambda: ssl.create_default_context(cafile=str(cert))
 
-        class VirtualHostHandler(BaseHTTPRequestHandler):
+    def _start_https_server(self):
+        cert, key = self._certificate()
+        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.load_cert_chain(cert, key)
+        seen = []
+
+        class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
-                requests.append((self.path, self.headers.get("Host")))
-                if self.headers.get("Host") != "pazysalvo.aaud.gob.pa":
-                    self.send_response(400)
-                    self.end_headers()
-                    return
-                body = (json.dumps(health).encode() if self.path == "/healthz"
-                        else html.encode() if self.path == "/login" else b"asset")
-                self.send_response(200)
+                self.server.seen.append((self.path, self.headers.get("Host")))
+                status, location, body = self.server.responder(self.path)
+                self.send_response(status)
+                if location is not None:
+                    self.send_header("Location", location)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -240,28 +245,88 @@ class ReleaseValidationTest(unittest.TestCase):
             def log_message(self, format, *args):
                 pass
 
-        server = ThreadingHTTPServer(("127.0.0.1", 0), VirtualHostHandler)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        server.seen = seen
+        server.responder = lambda path: (200, None, b"")
+        server.socket = tls.wrap_socket(server.socket, server_side=True)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
-        try:
-            origin = f"http://127.0.0.1:{server.server_port}"
-            with patch.object(validator, "ORIGIN", origin):
-                for mode in ("strict", "legacy-rollback"):
-                    with self.subTest(mode=mode):
-                        requests.clear()
-                        health.clear()
-                        health["status"] = "ok"
-                        if mode == "strict":
-                            health["release"] = SHA
-                        validator.smoke(self.release, SHA, mode)
-                        self.assertEqual(requests, [
-                            (path, "pazysalvo.aaud.gob.pa")
-                            for path in ("/healthz", "/login", self.css, self.js, "/healthz")
-                        ])
-        finally:
-            server.shutdown()
-            thread.join()
-            server.server_close()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server, cert, seen
+
+    def test_ssl_context_requires_certificate_verification(self):
+        context = validator.ssl_context()
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+
+    def test_send_pins_loopback_and_uses_sni_host(self):
+        with patch.object(validator, "PinnedHTTPSConnection") as factory, \
+                patch.object(validator, "ssl_context", return_value="ctx"):
+            response = factory.return_value.getresponse.return_value
+            response.status = 200
+            response.getheader.return_value = None
+            response.read.return_value = b"ok"
+            self.assertEqual(
+                validator._send("/healthz", validator.HOST, validator.ORIGIN, 10),
+                (200, None, b"ok"),
+            )
+            factory.assert_called_once_with("127.0.0.1", 443, validator.HOST, "ctx", 10)
+            factory.return_value.request.assert_called_once_with(
+                "GET", "/healthz", headers={"Host": validator.HOST, "Cache-Control": "no-cache"})
+            factory.return_value.close.assert_called_once()
+
+    def test_https_validation_accepts_health_login_and_assets(self):
+        server, cert, seen = self._start_https_server()
+        html = f'<script src="{self.js}"></script><link href="{self.css}" rel="stylesheet">'
+
+        def responder(path):
+            if path == "/healthz":
+                return 200, None, json.dumps({"status": "ok", "release": SHA}).encode()
+            if path == "/login":
+                return 200, None, html.encode()
+            return 200, None, b"asset"
+
+        server.responder = responder
+        origin = f"https://127.0.0.1:{server.server_port}"
+        with patch.object(validator, "ssl_context", self._trusted_context(cert)), \
+                patch.object(validator, "ORIGIN", origin):
+            validator.smoke(self.release, SHA)
+        self.assertEqual(seen, [
+            (path, validator.HOST)
+            for path in ("/healthz", "/login", self.css, self.js, "/healthz")
+        ])
+
+    def test_get_rejects_redirects_and_server_errors(self):
+        server, cert, _ = self._start_https_server()
+        origin = f"https://127.0.0.1:{server.server_port}"
+        with patch.object(validator, "ssl_context", self._trusted_context(cert)), \
+                patch.object(validator, "ORIGIN", origin):
+            server.responder = lambda path: (200, None, b"ok")
+            self.assertEqual(validator.get("/healthz"), b"ok")
+
+            server.responder = lambda path: (301, f"https://{validator.HOST}/healthz", b"")
+            with self.assertRaisesRegex(ValueError, r"HTTP 301.*Location"):
+                validator.get("/healthz")
+
+            server.responder = lambda path: (302, f"https://{validator.HOST}/login", b"")
+            with self.assertRaisesRegex(ValueError, "redirects to login"):
+                validator.get("/healthz")
+
+            server.responder = lambda path: (500, None, b"")
+            with self.assertRaisesRegex(ValueError, "HTTP 500"):
+                validator.get("/healthz")
+
+            server.responder = lambda path: (307, "https://evil.example/healthz", b"")
+            with self.assertRaisesRegex(ValueError, "unexpected redirect"):
+                validator.get("/healthz")
+
+    def test_get_rejects_untrusted_certificate(self):
+        server, _, _ = self._start_https_server()
+        origin = f"https://127.0.0.1:{server.server_port}"
+        with patch.object(validator, "ORIGIN", origin):
+            with self.assertRaises(ssl.SSLCertVerificationError):
+                validator.get("/login")
 
 
 if __name__ == "__main__":
