@@ -71,6 +71,71 @@ test('rangos rápidos y edición manual en escritorio y móvil', async ({ page }
     }
 });
 
+test('períodos rápidos: aplicación inmediata, filtros conservados y reinicio de paginación', async ({ page }) => {
+    const kpiTotal = async () => {
+        await page.waitForTimeout(150);
+        return Number((await page.getByLabel('Indicadores del historial').locator('strong').first().innerText()).replace(/\D/g, ''));
+    };
+    const waitForVisit = () => page.waitForResponse((response) => response.url().includes('/paz-salvos') && response.request().headers()['x-inertia'] === 'true');
+    const globalBefore = await page.getByLabel('Indicadores globales de Paz y Salvo').innerText();
+
+    await page.getByLabel('Número de Cliente', { exact: true }).fill('1234564787');
+    await page.getByLabel('Número de factura', { exact: true }).fill('777777');
+    await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+    await expect(page).toHaveURL(/nac=1234564787/);
+    await expect(page).toHaveURL(/numero_factura=777777/);
+    await page.getByRole('link', { name: '2', exact: true }).click();
+    await expect(page).toHaveURL(/page=2/);
+
+    let pending = waitForVisit();
+    await page.getByRole('button', { name: 'Hoy', exact: true }).click();
+    await pending;
+    const today = await page.getByLabel('Hasta', { exact: true }).inputValue();
+    await expect(page.getByLabel('Desde', { exact: true })).toHaveValue(today);
+    await expect(page).toHaveURL(new RegExp(`fecha_desde=${today}(&|$)`));
+    await expect(page).toHaveURL(new RegExp(`fecha_hasta=${today}(&|$)`));
+    await expect(page).toHaveURL(/nac=1234564787/);
+    await expect(page).toHaveURL(/numero_factura=777777/);
+    await expect(page).not.toHaveURL(/page=/);
+    await expect(page.getByRole('button', { name: 'Hoy', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const todayTotal = await kpiTotal();
+
+    const [year, month] = today.split('-').map(Number);
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const monthEnd = `${today.slice(0, 7)}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')}`;
+    pending = waitForVisit();
+    await page.getByRole('button', { name: 'Este mes' }).click();
+    await pending;
+    await expect(page.getByLabel('Desde', { exact: true })).toHaveValue(monthStart);
+    await expect(page.getByLabel('Hasta', { exact: true })).toHaveValue(monthEnd);
+    await expect(page).toHaveURL(new RegExp(`fecha_desde=${monthStart}(&|$)`));
+    await expect(page).toHaveURL(new RegExp(`fecha_hasta=${monthEnd}(&|$)`));
+    await expect(page.getByRole('button', { name: 'Este mes' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Hoy', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    const monthTotal = await kpiTotal();
+
+    const yearStart = `${today.slice(0, 4)}-01-01`;
+    const yearEnd = `${today.slice(0, 4)}-12-31`;
+    pending = waitForVisit();
+    await page.getByRole('button', { name: 'Este año' }).click();
+    await pending;
+    await expect(page.getByLabel('Desde', { exact: true })).toHaveValue(yearStart);
+    await expect(page.getByLabel('Hasta', { exact: true })).toHaveValue(yearEnd);
+    await expect(page).toHaveURL(new RegExp(`fecha_desde=${yearStart}(&|$)`));
+    await expect(page).toHaveURL(new RegExp(`fecha_hasta=${yearEnd}(&|$)`));
+    await expect(page.getByRole('button', { name: 'Este año' })).toHaveAttribute('aria-pressed', 'true');
+    const yearTotal = await kpiTotal();
+
+    expect(yearTotal).toBeGreaterThanOrEqual(monthTotal);
+    expect(monthTotal).toBeGreaterThanOrEqual(todayTotal);
+    expect(await page.getByLabel('Indicadores globales de Paz y Salvo').innerText()).toBe(globalBefore);
+
+    await page.getByLabel('Desde', { exact: true }).fill('2020-01-01');
+    await expect(page.getByRole('button', { name: 'Este año' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: 'Este mes' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: 'Hoy', exact: true })).toHaveAttribute('aria-pressed', 'false');
+});
+
 test('búsqueda por campos, rango inclusivo y paginación conservada', async ({ page }) => {
     const unexpected: string[] = [];
     page.on('response', (response) => { if (response.status() >= 500) unexpected.push(`${response.status()} ${response.url()}`); });

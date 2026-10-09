@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Eye, Filter, Loader2, SearchX, X } from 'lucide-react';
+import { Eraser, Eye, Filter, Loader2, SearchX, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from '@/components/app-layout';
 
@@ -25,10 +25,13 @@ export default function History({ documents, filters, statistics, authors, today
 
     const activeFilters = useMemo(() => Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''), [filters]);
     const hasActiveFilters = activeFilters.length > 0;
+    const currentYear = Number(todayPanama.slice(0, 4));
+    const currentMonth = Number(todayPanama.slice(5, 7));
+    const lastDayOfMonth = new Date(Date.UTC(currentYear, currentMonth, 0)).getUTCDate();
     const quickRanges = {
         today: { fecha_desde: todayPanama, fecha_hasta: todayPanama },
-        month: { fecha_desde: `${todayPanama.slice(0, 7)}-01`, fecha_hasta: todayPanama },
-        year: { fecha_desde: `${todayPanama.slice(0, 4)}-01-01`, fecha_hasta: todayPanama },
+        month: { fecha_desde: `${todayPanama.slice(0, 7)}-01`, fecha_hasta: `${todayPanama.slice(0, 7)}-${String(lastDayOfMonth).padStart(2, '0')}` },
+        year: { fecha_desde: `${todayPanama.slice(0, 4)}-01-01`, fecha_hasta: `${todayPanama.slice(0, 4)}-12-31` },
     };
     const matchingRange = (key: keyof typeof quickRanges) => values.fecha_desde === quickRanges[key].fecha_desde && values.fecha_hasta === quickRanges[key].fecha_hasta;
     const activeRange = selectedQuick && matchingRange(selectedQuick) ? selectedQuick : (Object.keys(quickRanges) as (keyof typeof quickRanges)[]).find(matchingRange);
@@ -88,6 +91,13 @@ export default function History({ documents, filters, statistics, authors, today
         event.preventDefault();
         if (dateRangeError || loading) return;
         visit(values);
+    };
+
+    const applyQuickRange = (key: keyof typeof quickRanges) => {
+        const next = { ...values, ...quickRanges[key] };
+        setSelectedQuick(key);
+        setValues(next);
+        visit(next);
     };
 
     const clearAll = () => {
@@ -174,17 +184,19 @@ export default function History({ documents, filters, statistics, authors, today
                         <label htmlFor="history-to">Hasta</label>
                         <input id="history-to" type="date" value={values.fecha_hasta} onChange={(event) => setField('fecha_hasta', event.target.value)} aria-invalid={Boolean(dateRangeError)} aria-describedby={dateRangeError ? 'history-date-error' : undefined} />
                     </div>
-                    <div className="history-quick-dates" role="group" aria-label="Rangos rápidos de emisión">
-                        {([['today', 'Hoy'], ['month', 'Este mes'], ['year', 'Este año']] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={activeRange === key} onClick={() => { editedDuringVisit.current = true; setSelectedQuick(key); setValues((current) => ({ ...current, ...quickRanges[key] })); }}>{label}</button>)}
-                    </div>
-
                     {dateRangeError && <p id="history-date-error" className="field-error history-filter-error" role="alert">{dateRangeError}</p>}
 
-                    <div className="history-filter-actions">
-                        <button type="button" className="btn-secondary" onClick={clearAll} disabled={loading || (!hasActiveFilters && Object.values(values).every((value) => !value))}>Limpiar filtros</button>
-                        <button type="submit" disabled={Boolean(dateRangeError) || loading}>
-                            {loading ? <><Loader2 className="animate-spin" /> Buscando…</> : <><Filter /> Aplicar filtros</>}
-                        </button>
+                    <div className="history-filter-footer">
+                        <div className="history-quick-dates" role="group" aria-label="Rangos rápidos de emisión">
+                            {([['today', 'Hoy'], ['month', 'Este mes'], ['year', 'Este año']] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={activeRange === key} onClick={() => applyQuickRange(key)}>{label}</button>)}
+                        </div>
+
+                        <div className="history-filter-actions">
+                            <button type="button" className="btn-secondary" onClick={clearAll} disabled={loading || (!hasActiveFilters && Object.values(values).every((value) => !value))}><Eraser aria-hidden="true" /> Limpiar filtros</button>
+                            <button type="submit" disabled={Boolean(dateRangeError) || loading}>
+                                {loading ? <><Loader2 className="animate-spin" /> Buscando…</> : <><Filter /> Aplicar filtros</>}
+                            </button>
+                        </div>
                     </div>
                 </form>
                 {requestError && <p className="field-error" role="alert">{requestError}</p>}
@@ -225,7 +237,7 @@ export default function History({ documents, filters, statistics, authors, today
                         <SearchX />
                         <h2>No se encontraron Paz y Salvo</h2>
                         <p>Revise los filtros ingresados o elimine algunos criterios para ampliar la búsqueda.</p>
-                        <button type="button" onClick={clearAll} disabled={!hasActiveFilters || loading}>Limpiar filtros</button>
+                        <button type="button" onClick={clearAll} disabled={!hasActiveFilters || loading}><Eraser aria-hidden="true" /> Limpiar filtros</button>
                     </div>
                 )}
             </section>
