@@ -480,10 +480,13 @@ table { width: 100%; border-collapse: collapse; } th, td { padding: 13px 15px; b
 .history-filter-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px 12px; }
 .history-filter-field, .history-filter-field-wide { grid-column: span 3; }
 .history-filter-field input { width: 100%; min-height: 40px; padding: 8px 10px; }
-.history-filter-actions, .history-quick-dates { grid-column: span 4; }
-.history-filter-actions button { min-height: 40px; }
+.history-filter-footer { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.history-filter-footer .history-quick-dates { display: flex; flex-wrap: wrap; align-items: end; gap: 6px; }
+.history-filter-footer .history-filter-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.history-filter-footer .history-filter-actions button { flex: 0 0 auto; min-height: 40px; }
 @media (max-width: 1100px) { .history-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .history-filter-field, .history-filter-field-wide, .history-filter-actions, .history-quick-dates { grid-column: span 1; } }
 @media (max-width: 720px) { .history-filter-grid { grid-template-columns: 1fr; } .history-filter-field, .history-filter-field-wide, .history-filter-actions, .history-quick-dates { grid-column: 1; } .history-filter-panel { padding: 14px; } }
+@media (max-width: 720px) { .history-filter-footer { flex-direction: column; align-items: stretch; } .history-filter-footer .history-filter-actions { justify-content: stretch; } }
 @media (max-width: 720px) {
     .history-table-card { border: 0; background: transparent; overflow: visible; }
     .history-table-card table, .history-table-card tbody, .history-table-card tr, .history-table-card td { display: block; width: 100%; }
