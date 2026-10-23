@@ -5,12 +5,14 @@ use App\Http\Controllers\ClientExcelFileController;
 use App\Http\Controllers\ForcedPasswordChangeController;
 use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\InstitutionalAccessController;
+use App\Http\Controllers\OidcLoginController;
 use App\Http\Controllers\PazSalvoController;
 use App\Http\Controllers\PazSalvoHistoryController;
 use App\Http\Controllers\PublicPazSalvoController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\SettingsAgencyController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\UserSsoIdentityController;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\PublicSecurityHeaders;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +37,8 @@ Route::redirect('/acceso-institucional', '/');
 Route::get('/healthz', HealthCheckController::class)->middleware('internal.network')->name('healthz');
 
 Route::middleware('guest')->group(function () {
+    Route::get('/auth/aaud/redirect', [OidcLoginController::class, 'redirect'])->middleware('throttle:20,1')->block(30, 10)->name('oidc.redirect');
+    Route::get('/auth/aaud/callback', [OidcLoginController::class, 'callback'])->middleware('throttle:20,1')->block(30, 10)->name('oidc.callback');
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
@@ -60,6 +64,12 @@ Route::middleware(['auth', 'single.session', 'idle.timeout', 'internal.network',
     Route::get('/paz-salvos/{pazSalvo}/download', [PazSalvoController::class, 'downloadPdf'])->middleware('permission:ver detalle paz y salvo')->name('paz-salvo.download');
     Route::patch('/paz-salvos/{pazSalvo}/cancelar', [PazSalvoHistoryController::class, 'cancel'])->middleware('permission:anular paz y salvo')->name('paz-salvos.cancel');
     Route::resource('/admin/users', AdminUserController::class)->except(['create', 'edit', 'show'])->middleware('permission:administrar usuarios');
+    Route::middleware('permission:administrar usuarios')->group(function () {
+        Route::get('/admin/sso-directory', [UserSsoIdentityController::class, 'search'])->middleware('throttle:20,1')->name('admin.sso-directory');
+        Route::get('/admin/users/{user}/sso-identity', [UserSsoIdentityController::class, 'show'])->name('admin.users.sso-identity.show');
+        Route::post('/admin/users/{user}/sso-identity', [UserSsoIdentityController::class, 'store'])->middleware('throttle:20,1')->name('admin.users.sso-identity.store');
+        Route::delete('/admin/users/{user}/sso-identity', [UserSsoIdentityController::class, 'destroy'])->middleware('throttle:20,1')->name('admin.users.sso-identity.destroy');
+    });
     Route::patch('/admin/users/{user}/toggle', [AdminUserController::class, 'toggle'])->middleware('permission:administrar usuarios')->name('admin.users.toggle');
     Route::patch('/admin/users/{user}/unlock-login-attempts', [AdminUserController::class, 'unlockLoginAttempts'])->middleware('permission:administrar usuarios')->name('admin.users.unlock-login-attempts');
     Route::patch('/admin/users/{user}/release-session', [AdminUserController::class, 'releaseActiveSession'])->middleware('permission:administrar usuarios')->name('admin.users.release-session');

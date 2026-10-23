@@ -1,9 +1,9 @@
 import { Form, Head, usePage } from '@inertiajs/react';
-import { Building2, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Building2, Eye, EyeOff, LogIn, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Login() {
-    const { flash } = usePage<{ flash: { error?: string } }>().props;
+    const { flash, oidc_login_enabled = false } = usePage<{ flash: { error?: string }; oidc_login_enabled?: boolean }>().props;
     const [passwordVisible, setPasswordVisible] = useState(false);
 
     return <div className="auth-page"><Head title="Iniciar sesión" /><section className="login-card">
@@ -24,6 +24,7 @@ export default function Login() {
                 <button disabled={processing}><LogIn /> {processing ? 'Ingresando…' : 'Ingresar'}</button>
             </>}
         </Form>
+        {oidc_login_enabled && <a href="/auth/aaud/redirect" className="login-sso-button"><ShieldCheck aria-hidden="true" />Iniciar sesión con AAUD AUTH</a>}
         <span className="login-watermark" aria-hidden="true">by: Informatica AAUD</span>
     </section></div>;
 }

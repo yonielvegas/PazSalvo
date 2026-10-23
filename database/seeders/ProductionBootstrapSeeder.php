@@ -3,11 +3,12 @@
 namespace Database\Seeders;
 
 use App\Models\Agency;
+use App\Models\Role;
 use App\Models\User;
+use App\Services\AdministrativeTransaction;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
 
 class ProductionBootstrapSeeder extends Seeder
 {
@@ -19,7 +20,7 @@ class ProductionBootstrapSeeder extends Seeder
 
     public function run(): void
     {
-        DB::transaction(function (): void {
+        AdministrativeTransaction::run(function (): void {
             $this->call(MasterDataSeeder::class);
 
             foreach (AgencyCatalog::AGENCIES as $data) {
@@ -68,7 +69,7 @@ class ProductionBootstrapSeeder extends Seeder
                 'must_change_password' => false,
                 'session_version' => $user->session_version ?? 0,
             ])->save();
-            $user->assignRole($role);
+            $user->syncRoles([$role]);
         });
     }
 }

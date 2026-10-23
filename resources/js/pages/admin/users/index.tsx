@@ -2,6 +2,7 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { AppLayout } from '@/components/app-layout';
 import { Modal } from '@/components/ui/modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { SsoIdentitySection, panamaDate, type SsoLink, type SsoSelection, type VerifiedProfile } from '@/components/admin/sso-identity-section';
 import { Plus, Pencil, UserCheck, UserX, X, AlertTriangle, Image as ImageIcon, Eye, UnlockKeyhole, LogOut, KeyRound, Copy, CheckCircle2 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 
@@ -9,10 +10,15 @@ type User = {
     id: number;
     name: string;
     email: string;
+    username: string | null;
     is_active: boolean;
+    sso_linked: boolean;
+    sso_sync?: string | null;
+    sso_identity: SsoLink | null;
+    created_at: string | null;
     agency_id: number;
     agency: string | null;
-    roles: string[];
+    role: string | null;
     has_active_general_admin_signature: boolean;
     has_any_general_admin_signature: boolean;
     login_attempts: number;
@@ -26,16 +32,25 @@ type Agency = { id: number; name: string };
 
 type PageErrors = Record<string, string>;
 
-const initialCreate = { name: '', email: '', agency_id: '', role: '', is_active: true };
+const initialCreate = { name: '', email: '', username: '', agency_id: '', role: '', is_active: true };
 
-export default function UsersIndex({ users, agencies, roles, temporary_password }: { users: User[]; agencies: Agency[]; roles: string[]; temporary_password: string }) {
-    const { flash } = usePage<{ flash: { message?: string }; errors: PageErrors & { needs_general_admin_replace_confirmation?: string; current_general_admin_name?: string; activation_replace?: string } }>().props;
+export default function UsersIndex({ users, agencies, roles, temporary_password, sso_directory_available = false, sso_sync_attention_count = 0 }: { users: User[]; agencies: Agency[]; roles: string[]; temporary_password: string; sso_directory_available?: boolean; sso_sync_attention_count?: number }) {
+    const { flash } = usePage<{ flash: { message?: string; sso_sync?: string }; errors: PageErrors & { needs_general_admin_replace_confirmation?: string; current_general_admin_name?: string; activation_replace?: string } }>().props;
 
     const [showCreate, setShowCreate] = useState(false);
+    const [createSsoSelection, setCreateSsoSelection] = useState<SsoSelection | null>(null);
+    const [createOutcomeUncertain, setCreateOutcomeUncertain] = useState(false);
+    const [createSsoEnabled, setCreateSsoEnabled] = useState(true);
+    const [createProfile, setCreateProfile] = useState<VerifiedProfile>({});
+    const [editSsoEnabled, setEditSsoEnabled] = useState(false);
+    const [editSsoSelection, setEditSsoSelection] = useState<SsoSelection | null>(null);
+    const [editProfile, setEditProfile] = useState<VerifiedProfile>({});
+    const [editUnlinkConfirm, setEditUnlinkConfirm] = useState(false);
+    const [editOutcomeUncertain, setEditOutcomeUncertain] = useState(false);
     const [editUser, setEditUser] = useState<User | null>(null);
     const [toggleUser, setToggleUser] = useState<User | null>(null);
     const [createForm, setCreateForm] = useState(initialCreate);
-    const [editForm, setEditForm] = useState({ name: '', email: '', agency_id: '', role: '', is_active: true });
+    const [editForm, setEditForm] = useState(initialCreate);
     const [createErrors, setCreateErrors] = useState<PageErrors>({});
     const [editErrors, setEditErrors] = useState<PageErrors>({});
     const [toggleErrors, setToggleErrors] = useState<PageErrors>({});
@@ -55,12 +70,20 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
     const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
     const [resetPasswordComplete, setResetPasswordComplete] = useState(false);
     const [temporaryPasswordCopied, setTemporaryPasswordCopied] = useState(false);
+    const createInstitutional = createSsoEnabled ? createProfile : {};
+    const editInstitutional = editSsoEnabled ? editProfile : {};
+    const createLocks = new Set(Object.keys(createInstitutional));
+    const editLocks = new Set(Object.keys(editInstitutional));
 
     const isGeneralAdminRole = (role: string) => role === 'administrador_general';
-    const canViewSignature = (u: User) => u.roles.includes('administrador_general') || u.has_any_general_admin_signature;
+    const canViewSignature = (u: User) => u.role === 'administrador_general' || u.has_any_general_admin_signature;
 
     const openCreate = useCallback(() => {
         setShowCreate(true);
+        setCreateSsoSelection(null);
+        setCreateSsoEnabled(true);
+        setCreateProfile({});
+        setCreateOutcomeUncertain(false);
         setCreateForm(initialCreate);
         setCreateErrors({});
         setCreateNeedsGeneralAdminReplaceConfirm(false);
@@ -71,11 +94,17 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
 
     const openEdit = useCallback((user: User) => {
         setEditUser(user);
+        setEditSsoEnabled(user.sso_linked);
+        setEditSsoSelection(null);
+        setEditProfile(user.sso_identity?.verified_profile ?? {});
+        setEditUnlinkConfirm(false);
+        setEditOutcomeUncertain(false);
         setEditForm({
             name: user.name,
             email: user.email,
+            username: user.username ?? '',
             agency_id: String(user.agency_id),
-            role: user.roles[0] || '',
+            role: user.role || '',
             is_active: user.is_active,
         });
         setEditErrors({});
@@ -101,16 +130,21 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
 
     const handleCreate = useCallback((e: React.FormEvent) => {
         e.preventDefault();
+        if (createOutcomeUncertain || (createSsoEnabled && !createSsoSelection)) return;
         setProcessing('create');
 
         const formData = new FormData();
-        formData.append('name', createForm.name);
-        formData.append('email', createForm.email);
+        formData.append('name', createInstitutional.name ?? createForm.name);
+        formData.append('email', createInstitutional.email ?? createForm.email);
+        formData.append('username', createInstitutional.username ?? createForm.username);
         formData.append('agency_id', String(Number(createForm.agency_id)));
         formData.append('role', createForm.role);
         formData.append('is_active', createForm.is_active ? '1' : '0');
         if (createGeneralAdminSignatureFile) formData.append('general_admin_signature', createGeneralAdminSignatureFile);
         if (createNeedsGeneralAdminReplaceConfirm) formData.append('confirm_replace', '1');
+        if (createSsoEnabled && createSsoSelection) {
+            Object.entries(createSsoSelection).forEach(([key, value]) => formData.append(`sso_identity[${key}]`, typeof value === 'boolean' ? (value ? '1' : '0') : String(value)));
+        }
 
         router.post('/admin/users', formData, {
             preserveState: true,
@@ -130,17 +164,31 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                 setCreateErrors(errs);
                 setProcessing(null);
             },
+            onNetworkError: () => {
+                setCreateOutcomeUncertain(true);
+                setProcessing(null);
+                return false;
+            },
         });
-    }, [createForm, createGeneralAdminSignatureFile, createNeedsGeneralAdminReplaceConfirm]);
+    }, [createForm, createGeneralAdminSignatureFile, createNeedsGeneralAdminReplaceConfirm, createSsoSelection, createOutcomeUncertain, createSsoEnabled, createInstitutional]);
 
-    const handleEdit = useCallback((e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editUser) return;
+    const submitEdit = useCallback((confirmedUnlink = false) => {
+        if (!editUser || editOutcomeUncertain || (editSsoEnabled && !editUser.sso_linked && !editSsoSelection)) return;
+        const unlink = editUser.sso_linked && !editSsoEnabled;
+        if (unlink && !confirmedUnlink) { setEditUnlinkConfirm(true); return; }
+        setEditUnlinkConfirm(false);
         setProcessing('edit');
 
         const formData = new FormData();
-        formData.append('name', editForm.name);
-        formData.append('email', editForm.email);
+        formData.append('name', editInstitutional.name ?? editForm.name);
+        formData.append('email', editInstitutional.email ?? editForm.email);
+        formData.append('username', editInstitutional.username ?? editForm.username);
+        formData.append('sso_action', unlink ? 'unlink' : editSsoSelection ? 'link' : 'keep');
+        formData.append('sso_identity_id', editUser.sso_identity ? String(editUser.sso_identity.id) : '');
+        if (unlink) formData.append('sso_unlink_confirmed', '1');
+        if (editSsoEnabled && editSsoSelection) {
+            Object.entries(editSsoSelection).forEach(([key, value]) => formData.append(`sso_identity[${key}]`, typeof value === 'boolean' ? (value ? '1' : '0') : String(value)));
+        }
         formData.append('agency_id', String(Number(editForm.agency_id)));
         formData.append('role', editForm.role);
         formData.append('is_active', editForm.is_active ? '1' : '0');
@@ -166,8 +214,10 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                 setEditErrors(errs);
                 setProcessing(null);
             },
+            onNetworkError: () => { setEditOutcomeUncertain(true); setProcessing(null); return false; },
         });
-    }, [editUser, editForm, editGeneralAdminSignatureFile, editNeedsGeneralAdminReplaceConfirm]);
+    }, [editUser, editForm, editGeneralAdminSignatureFile, editNeedsGeneralAdminReplaceConfirm, editSsoSelection, editSsoEnabled, editInstitutional, editOutcomeUncertain]);
+    const handleEdit = (event: React.FormEvent) => { event.preventDefault(); submitEdit(); };
 
     const handleToggle = useCallback(() => {
         if (!toggleUser) return;
@@ -285,11 +335,13 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                 </div>
 
                 {showFlash && (
-                    <div className="notice success dismiss-notice">
-                        <span>{flash.message}</span>
+                    <div className={`notice dismiss-notice ${flash.sso_sync?.includes('requiere atención') ? 'error' : flash.sso_sync?.includes('pendiente') ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'success'}`}>
+                        <span>{flash.message}{flash.sso_sync && <span className="block text-sm">{flash.sso_sync}</span>}</span>
                         <button onClick={() => setDismissed(true)} aria-label="Cerrar"><X size={16} /></button>
                     </div>
                 )}
+
+                {sso_sync_attention_count > 0 && <div className="notice error" role="status">Hay {sso_sync_attention_count} sincronizaciones SSO que requieren atención, incluidas revocaciones de cuentas eliminadas.</div>}
 
                 {toggleErrors.user && (
                     <div className="notice error dismiss-notice">
@@ -320,14 +372,14 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                                     <td><small style={{ display: 'block', color: '#71817e', marginTop: 0 }}>{u.email}</small></td>
                                     <td>{u.agency ?? <small style={{ color: '#a0b3b0' }}>Sin agencia</small>}</td>
                                     <td>
-                                        {u.roles.map((r) => (
-                                            <span key={r} className={`role-badge ${r === 'administrador_general' ? 'role-badge-supervisor' : ''}`} style={{ marginRight: 4 }}>
-                                                {r === 'administrador_general' ? 'Administrador General' : r}
-                                                {r === 'administrador_general' && u.has_active_general_admin_signature && (
+                                        {u.role && (
+                                            <span className={`role-badge ${u.role === 'administrador_general' ? 'role-badge-supervisor' : ''}`} style={{ marginRight: 4 }}>
+                                                {u.role === 'administrador_general' ? 'Administrador General' : u.role}
+                                                {u.role === 'administrador_general' && u.has_active_general_admin_signature && (
                                                     <span style={{ marginLeft: 4, fontSize: 10 }}>· Activo</span>
                                                 )}
                                             </span>
-                                        ))}
+                                        )}
                                     </td>
                                     <td>
                                         <div className="user-status-stack">
@@ -353,6 +405,8 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                                     </td>
                                     <td>
                                         <div className="actions-cell">
+                                            <span title={u.sso_sync ?? undefined} className={`sso-badge ${u.sso_linked ? 'is-linked' : 'is-unlinked'}`}>SSO: {u.sso_linked ? 'SI' : 'No'}</span>
+                                            {u.sso_sync && !u.sso_sync.startsWith('Sincronizado correctamente') && <small className={`text-xs ${u.sso_sync.includes('requiere atención') ? 'text-red-800' : 'text-amber-800'}`} title={u.sso_sync}>{u.sso_sync.includes('requiere atención') ? 'SSO: revisar' : 'SSO pendiente'}</small>}
                                             {canViewSignature(u) && (
                                                 <span className="tooltip" data-tip="Ver firma">
                                                     <button className="icon-btn" onClick={() => setSignaturePreviewUser(u)} aria-label="Ver firma">
@@ -419,7 +473,16 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                 title="Nuevo usuario"
                 description="Complete la informacion del usuario y asigne su agencia y rol. Iniciará con contraseña temporal y cambio obligatorio."
             >
-                <form onSubmit={handleCreate} className="modal-form">
+                <form onSubmit={handleCreate} className="modal-form user-editor-form">
+                    <SsoIdentitySection mode="create" enabled={createSsoEnabled} selection={createSsoSelection} profile={createInstitutional}
+                        onEnabledChange={(enabled) => { setCreateSsoEnabled(enabled); setCreateSsoSelection(null); setCreateProfile({}); }}
+                        onSelect={(selection, profile) => { setCreateSsoSelection(selection); setCreateProfile(profile); setCreateErrors({}); }}
+                        available={sso_directory_available} disabled={processing === 'create' || createOutcomeUncertain}
+                        error={createErrors.identity || Object.entries(createErrors).find(([key]) => key.startsWith('sso_identity'))?.[1]} />
+                    {createOutcomeUncertain && <div className="sso-confirm" role="alert">
+                        <p>No se pudo confirmar el resultado de la creación. La cuenta podría haberse guardado. Compruebe el listado antes de volver a crear; no se repetirá la solicitud automáticamente.</p>
+                        <button type="button" className="btn-secondary" onClick={() => router.reload({ only: ['users'], onSuccess: () => setShowCreate(false) })}>Actualizar listado y comprobar</button>
+                    </div>}
                     {createNeedsGeneralAdminReplaceConfirm && (
                         <div className="replace-alert">
                             <div className="replace-alert-icon">
@@ -435,13 +498,20 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                     )}
                     <div className="form-group">
                         <label htmlFor="create-name">Nombre completo</label>
-                        <input id="create-name" value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} required />
+                        <input id="create-name" value={createInstitutional.name ?? createForm.name} readOnly={createLocks.has('name')} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} required />
+                        {createLocks.has('name') && <small className="sso-help">Verificado por AAUD AUTH</small>}
                         {createErrors.name && <p className="field-error">{createErrors.name}</p>}
                     </div>
                     <div className="form-group">
                         <label htmlFor="create-email">Correo electronico</label>
-                        <input id="create-email" type="email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} required />
+                        <input id="create-email" type="email" value={createInstitutional.email ?? createForm.email} readOnly={createLocks.has('email')} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} required />
+                        {createLocks.has('email') && <small className="sso-help">Verificado por AAUD AUTH</small>}
                         {createErrors.email && <p className="field-error">{createErrors.email}</p>}
+                    </div>
+                    <div className="form-group"><label htmlFor="create-username">Usuario (username)</label>
+                        <input id="create-username" value={createInstitutional.username ?? createForm.username} readOnly={createLocks.has('username')} maxLength={255} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })} />
+                        {createLocks.has('username') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {createErrors.username && <p className="field-error">{createErrors.username}</p>}
                     </div>
                     <div className="form-row">
                         <div className="form-group">
@@ -500,20 +570,27 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                     )}
                     <div className="modal-footer">
                         <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)} disabled={processing === 'create'}>Cancelar</button>
-                        <button type="submit" className={createNeedsGeneralAdminReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'create'}>
-                            {processing === 'create' ? 'Creando…' : createNeedsGeneralAdminReplaceConfirm ? 'Sí, reemplazar Administrador General' : 'Crear usuario'}
+                        <button type="submit" className={createNeedsGeneralAdminReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'create' || createOutcomeUncertain || (createSsoEnabled && !createSsoSelection)}>
+                            {processing === 'create' ? 'Creando…' : createNeedsGeneralAdminReplaceConfirm ? 'Sí, reemplazar Administrador General' : createSsoSelection ? 'Crear usuario y vincular SSO' : 'Crear usuario'}
                         </button>
                     </div>
                 </form>
             </Modal>
 
             <Modal
-                open={editUser !== null}
+                open={editUser !== null && !editUnlinkConfirm}
                 onClose={() => { if (processing !== 'edit') setEditUser(null); }}
                 title="Editar usuario"
                 description="Actualiza la informacion, agencia, rol o estado del usuario."
             >
-                <form onSubmit={handleEdit} className="modal-form">
+                <form onSubmit={handleEdit} className="modal-form user-editor-form">
+                    {editUser && <SsoIdentitySection mode="edit" identity={editUser.sso_identity} enabled={editSsoEnabled} selection={editSsoSelection} profile={editInstitutional}
+                        available={sso_directory_available} disabled={processing === 'edit' || editOutcomeUncertain}
+                        onEnabledChange={(enabled) => { setEditSsoEnabled(enabled); setEditSsoSelection(null); setEditProfile(enabled ? editUser.sso_identity?.verified_profile ?? {} : {}); }}
+                        onSelect={(selection, profile) => { setEditSsoSelection(selection); setEditProfile(profile); setEditErrors({}); }}
+                        error={editErrors.identity || Object.entries(editErrors).find(([key]) => key.startsWith('sso_identity'))?.[1]} />}
+                    {editOutcomeUncertain && <div className="sso-confirm" role="alert"><p>No se pudo confirmar el resultado. Actualice el listado antes de repetir el guardado.</p>
+                        <button type="button" className="btn-secondary" onClick={() => router.reload({ only: ['users'], onSuccess: () => setEditUser(null) })}>Actualizar listado y comprobar</button></div>}
                     {editNeedsGeneralAdminReplaceConfirm && (
                         <div className="replace-alert">
                             <div className="replace-alert-icon">
@@ -529,13 +606,21 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                     )}
                     <div className="form-group">
                         <label htmlFor="edit-name">Nombre completo</label>
-                        <input id="edit-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+                        <input id="edit-name" value={editInstitutional.name ?? editForm.name} readOnly={editLocks.has('name')} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+                        {editLocks.has('name') && <small className="sso-help">Verificado por AAUD AUTH</small>}
                         {editErrors.name && <p className="field-error">{editErrors.name}</p>}
                     </div>
                     <div className="form-group">
                         <label htmlFor="edit-email">Correo electronico</label>
-                        <input id="edit-email" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+                        <input id="edit-email" type="email" value={editInstitutional.email ?? editForm.email} readOnly={editLocks.has('email')} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+                        {editLocks.has('email') && <small className="sso-help">Verificado por AAUD AUTH</small>}
                         {editErrors.email && <p className="field-error">{editErrors.email}</p>}
+                    </div>
+                    <div className="form-group"><label htmlFor="edit-username">Usuario (username)</label>
+                        <input id="edit-username" value={editInstitutional.username ?? editForm.username} readOnly={editLocks.has('username') || (editUser?.sso_linked === true && !editSsoEnabled)} maxLength={255} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} />
+                        {editUser?.sso_linked && !editSsoEnabled && <small className="sso-help">Al desvincular se conserva el username actual. Podrá editarlo después de guardar.</small>}
+                        {editLocks.has('username') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {editErrors.username && <p className="field-error">{editErrors.username}</p>}
                     </div>
                     <div className="form-row">
                         <div className="form-group">
@@ -599,14 +684,19 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                             {editErrors.general_admin_signature && <p className="field-error">{editErrors.general_admin_signature}</p>}
                         </div>
                     )}
+                    <p className="sso-date local-created-at">Usuario creado en Paz y Salvo: {editUser?.created_at ? panamaDate(editUser.created_at) : 'No disponible'}</p>
                     <div className="modal-footer">
                         <button type="button" className="btn-secondary" onClick={() => setEditUser(null)} disabled={processing === 'edit'}>Cancelar</button>
-                        <button type="submit" className={editNeedsGeneralAdminReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'edit'}>
+                        <button type="submit" className={editNeedsGeneralAdminReplaceConfirm ? 'btn-warning' : ''} disabled={processing === 'edit' || editOutcomeUncertain || (editSsoEnabled && !editUser?.sso_linked && !editSsoSelection)}>
                             {processing === 'edit' ? 'Guardando…' : editNeedsGeneralAdminReplaceConfirm ? 'Sí, reemplazar Administrador General' : 'Guardar cambios'}
                         </button>
                     </div>
                 </form>
             </Modal>
+
+            <ConfirmDialog open={editUnlinkConfirm} onClose={() => setEditUnlinkConfirm(false)} onConfirm={() => submitEdit(true)}
+                title="Guardar desvinculación de AAUD AUTH" confirmLabel="Confirmar y guardar" processing={processing === 'edit'}
+                message="Se guardarán los cambios del formulario y se desvinculará la identidad. El usuario, username, contraseña, rol, agencia e historial se conservarán salvo los cambios locales expresamente realizados." />
 
             <ConfirmDialog
                 open={toggleUser !== null && toggleReplaceUser === null}
@@ -688,7 +778,7 @@ export default function UsersIndex({ users, agencies, roles, temporary_password 
                 {signaturePreviewUser && (
                     <div style={{ textAlign: 'center' }}>
                         <p style={{ marginBottom: 16, color: '#71817e', fontSize: 14 }}>
-                            {signaturePreviewUser.roles.includes('administrador_general')
+                            {signaturePreviewUser.role === 'administrador_general'
                                 ? 'Firma de Administrador General'
                                 : 'Firma del usuario'}
                             {' · '}

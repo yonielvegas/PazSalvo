@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\PazSalvo;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\PazSalvoService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -12,7 +13,6 @@ use Illuminate\Testing\TestResponse;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ConsultPazSalvoTest extends TestCase

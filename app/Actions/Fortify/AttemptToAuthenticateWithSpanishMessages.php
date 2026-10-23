@@ -28,7 +28,7 @@ class AttemptToAuthenticateWithSpanishMessages
         }
 
         if ($user && $user->is_active && Hash::check((string) $request->input('password'), $user->password)) {
-            if (! $user->roles()->exists()) {
+            if (! $user->hasOperationalRole()) {
                 throw ValidationException::withMessages([
                     Fortify::username() => [User::NO_ROLE_LOGIN_MESSAGE],
                 ]);

@@ -6,6 +6,7 @@ use App\Exceptions\PdfConversionException;
 use App\Models\Client;
 use App\Models\GeneralAdminSignature;
 use App\Models\PazSalvo;
+use App\Models\Role;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\CertificateNumberService;
@@ -22,7 +23,6 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class PazSalvoServiceTest extends TestCase

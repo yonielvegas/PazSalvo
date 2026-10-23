@@ -1,10 +1,10 @@
 <?php
 
 use App\Models\Agency;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Role;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
