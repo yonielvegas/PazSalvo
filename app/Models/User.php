@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\HasSingleRole;
 use App\Services\AdministrativeTransaction;
+use App\Services\AuditLogger;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -70,6 +71,16 @@ class User extends Authenticatable
 
     protected $guarded = [];
 
+    protected $attributes = ['local_login_enabled' => true];
+
+    public function assertLocalPasswordChangesAllowed(): void
+    {
+        if (! $this->local_login_enabled) {
+            app(AuditLogger::class)->record('user.password_change_rejected', ['reason' => 'local_login_disabled'], $this, result: 'denied');
+            throw ValidationException::withMessages(['password' => 'El acceso local solo puede habilitarse mediante un restablecimiento administrativo.']);
+        }
+    }
+
     public static function normalizeUsername(?string $value): ?string
     {
         $value = $value === null ? '' : mb_strtolower(trim($value), 'UTF-8');
@@ -87,6 +98,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
+            'local_login_enabled' => 'boolean',
             'is_login_blocked' => 'boolean',
             'login_attempts' => 'integer',
             'session_version' => 'integer',

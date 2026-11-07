@@ -3,7 +3,7 @@
 ## Alcance y autoridad
 
 El administrador selecciona expresamente una identidad `issuer + subject` por medio
-del directorio de AAUD AUTH. Username, nombre o correo no deciden asociaciones.
+del directorio de AAUD OAUTH. Username, nombre o correo no deciden asociaciones.
 El login local sigue usando email y contraseña; no hay login por username ni OIDC.
 Los roles, permisos, agencias, estados, contraseñas e historial permanecen locales.
 No se sincronizan accesos ni catálogos y no se modifica Keycloak/Active Directory.
@@ -18,7 +18,7 @@ No se sincronizan accesos ni catálogos y no se modifica Keycloak/Active Directo
 - `user_sso_identities.verified_profile`: JSONB nullable. Solo almacena username,
   nombre real y correo válidos recibidos del directorio; sus claves constituyen la
   procedencia explícita. Nunca se copia un perfil arbitrario enviado por el navegador.
-- `name_is_fallback`: booleano añadido al contrato de AAUD AUTH. Conserva el campo
+- `name_is_fallback`: booleano añadido al contrato de AAUD OAUTH. Conserva el campo
   name anterior para compatibilidad. Si es true, el username usado como respaldo
   no se importa como nombre completo. Un nombre real igual al username sigue
   identificado correctamente por el flag, sin heurísticas de igualdad.
@@ -33,7 +33,7 @@ seleccionar nuevamente esa misma identidad para verificarla, conservando ID y fe
 
 ## Interfaz y guardado
 
-Nuevo usuario abre con el switch AAUD AUTH activado; requiere selección explícita
+Nuevo usuario abre con el switch AAUD OAUTH activado; requiere selección explícita
 para crear con SSO. Al desactivarlo desaparece la búsqueda y se recupera el borrador
 local escrito antes de seleccionar. Los campos verificados se muestran readonly y
 marcados; los demás permanecen editables. Solo Guardar produce escrituras.
@@ -75,7 +75,7 @@ No hay cambios de IDs ni contraseñas ni asignaciones. Los rollback eliminan las
 columnas nuevas y sus restricciones; por ello eliminan también sus datos nuevos,
 aunque conservan usuarios y vinculaciones. Fueron comprobados en testing.
 
-El productor AAUD AUTH debe servir name_is_fallback antes de utilizar la importación
+El productor AAUD OAUTH debe servir name_is_fallback antes de utilizar la importación
 del perfil. El cliente falla cerrado si el campo está ausente o no es booleano.
 
 ## Pruebas y visualización
@@ -83,7 +83,7 @@ del perfil. El cliente falla cerrado si el campo está ausente o no es booleano.
 Las pruebas PHP verifican current_database() y exigen una base PostgreSQL aislada
 terminada en _testing. El runner local de QA usa pazsalvo_phase01_20261019_testing.
 Las carreras usan procesos independientes y observan esperas reales en pg_stat_activity.
-Se bloquea HTTP no simulado. La prueba del directorio de AAUD AUTH usa dobles de DB/HTTP.
+Se bloquea HTTP no simulado. La prueba del directorio de AAUD OAUTH usa dobles de DB/HTTP.
 
 Las pruebas visuales no arrancan Laravel ni acceden a datos reales; interceptan todas
 las peticiones y prueban fechas con el navegador configurado en otra zona horaria:

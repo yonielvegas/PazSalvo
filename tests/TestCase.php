@@ -10,6 +10,8 @@ abstract class TestCase extends BaseTestCase
     public function createApplication()
     {
         $app = parent::createApplication();
+        // Synthetic role IDs must never populate the application's persistent permission cache.
+        $app['config']->set('permission.cache.store', 'array');
         $connection = $app['config']->get('database.default');
         $database = $app['config']->get("database.connections.{$connection}.database");
         if (! $app->environment('testing') || $connection !== 'pgsql' || ! is_string($database) || ! str_ends_with($database, '_testing')) {

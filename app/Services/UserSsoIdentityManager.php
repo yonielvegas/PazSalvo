@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Integrations\AaudAuth\Exceptions\AaudAuthRequestException;
-use App\Integrations\AaudAuth\Http\AaudAuthClient;
+use App\Integrations\AaudOauth\Exceptions\AaudOauthRequestException;
+use App\Integrations\AaudOauth\Http\AaudOauthClient;
 use App\Models\User;
 use App\Models\UserSsoIdentity;
 use Closure;
@@ -18,7 +18,7 @@ use Throwable;
 
 final class UserSsoIdentityManager
 {
-    public function __construct(private readonly AaudAuthClient $client, private readonly AuditLogger $audit) {}
+    public function __construct(private readonly AaudOauthClient $client, private readonly AuditLogger $audit) {}
 
     public function link(User $target, User $actor, array $selection, Request $request): UserSsoIdentity
     {
@@ -64,7 +64,7 @@ final class UserSsoIdentityManager
         }
         if (Validator::make($profile, ['username' => ['required', 'string', 'max:255', 'regex:/\A[^\x00-\x1f\x7f]+\z/uD'],
             'name' => ['sometimes', 'required', 'string', 'max:255']])->fails()) {
-            throw new AaudAuthRequestException('invalid_response');
+            throw new AaudOauthRequestException('invalid_response');
         }
 
         return $profile;
@@ -140,7 +140,7 @@ final class UserSsoIdentityManager
 
     private function verifySelection(array $selection): array
     {
-        if ($selection['issuer'] !== config('aaud-auth.issuer')) {
+        if ($selection['issuer'] !== config('aaud-oauth.issuer')) {
             throw ValidationException::withMessages(['identity' => 'El emisor seleccionado no es el directorio configurado.']);
         }
         $results = $this->client->searchDirectory($selection['query'], $selection['page']);

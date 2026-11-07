@@ -2,12 +2,14 @@
 
 namespace App\Providers;
 
+use App\Auth\LocalLoginUserProvider;
 use App\Models\PazSalvo;
 use App\Models\User;
 use App\Policies\PazSalvoPolicy;
 use App\Policies\UserPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -28,6 +30,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Auth::provider('local-login-eloquent', fn ($app, $config) => new LocalLoginUserProvider($app['hash'], $config['model']));
+
         RateLimiter::for('public-manual-validation', function (Request $request) {
             return Limit::perMinute((int) config('public.rate_limits.manual'))
                 ->by('manual:'.$request->ip())

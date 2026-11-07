@@ -36,6 +36,10 @@ class FortifyServiceProvider extends ServiceProvider
         {
             public function toResponse($request)
             {
+                // The completed Fortify pipeline authenticated this session locally.
+                $request->session()->forget(['oidc_flow', 'auth_sso_identity_id', 'auth_sso_issuer', 'auth_sso_subject']);
+                $request->session()->put('auth_method', 'local');
+
                 if ($request->user()?->must_change_password) {
                     return redirect()->route('password.force-change');
                 }
@@ -54,7 +58,10 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::updateUserProfileInformationUsing(UpdateUserProfileInformation::class);
         Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
-        Fortify::loginView(fn () => Inertia::render('auth/login'));
+        Fortify::loginView(fn () => Inertia::render('auth/login', [
+            // This page owns both login choices, including during partial Inertia reloads.
+            'oidc_login_enabled' => Inertia::always(config('aaud-oidc.enabled') === true),
+        ]));
         Fortify::authenticateThrough(fn (Request $request) => array_filter([
             EnsureLoginIsNotThrottled::class,
             config('fortify.lowercase_usernames') ? CanonicalizeUsername::class : null,
@@ -64,6 +71,10 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::authenticateUsing(function (Request $request) {
             $email = strtolower((string) $request->input(Fortify::username()));
             $user = User::where('email', $email)->first();
+
+            if ($user && ! $user->local_login_enabled) {
+                throw ValidationException::withMessages([Fortify::username() => ['Correo o contraseña incorrectos.']]);
+            }
 
             if ($user?->is_login_blocked) {
                 throw ValidationException::withMessages([
@@ -80,6 +91,9 @@ class FortifyServiceProvider extends ServiceProvider
 
                 $user = DB::transaction(function () use ($user) {
                     $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                    if (! $locked->local_login_enabled) {
+                        throw ValidationException::withMessages([Fortify::username() => ['Correo o contraseña incorrectos.']]);
+                    }
                     $locked->forceFill([
                         'login_attempts' => 0,
                         'is_login_blocked' => false,

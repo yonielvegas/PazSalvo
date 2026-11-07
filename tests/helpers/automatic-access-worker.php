@@ -1,6 +1,6 @@
 <?php
 
-use App\Integrations\AaudAuth\Access\AccessDelivery;
+use App\Integrations\AaudOauth\Access\AccessDelivery;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -13,9 +13,9 @@ if (config('app.env') !== 'testing' || ! str_ends_with(DB::selectOne('SELECT cur
     throw new RuntimeException('Isolated PostgreSQL testing required');
 }
 [$script, $owner, $marker, $release] = $argv;
-config(['aaud-auth.automatic' => true, 'aaud-auth.enabled' => true, 'aaud-auth.issuer' => 'https://id.example.test/realms/aaud',
-    'aaud-auth.api_url' => 'https://auth.example.test', 'aaud-auth.token_url' => 'https://id.example.test/token',
-    'aaud-auth.client_id' => 'pazysalvo-sync', 'aaud-auth.client_secret' => 'fixture-private']);
+config(['aaud-oauth.automatic' => true, 'aaud-oauth.enabled' => true, 'aaud-oauth.issuer' => 'https://id.example.test/realms/aaud',
+    'aaud-oauth.api_url' => 'https://auth.example.test', 'aaud-oauth.token_url' => 'https://id.example.test/token',
+    'aaud-oauth.client_id' => 'pazysalvo-sync', 'aaud-oauth.client_secret' => 'fixture-private']);
 file_put_contents($marker.'.started', (string) DB::selectOne('SELECT pg_backend_pid() AS pid')->pid);
 Http::preventStrayRequests();
 $sent = 0;
@@ -37,7 +37,7 @@ Http::fake(function ($request) use ($marker, $release, &$sent, &$current) {
             throw new RuntimeException('Barrier timeout');
         }
 
-        return Http::response(['data' => $current ?? ['issuer' => config('aaud-auth.issuer'), 'subject' => 'subject-A', 'application_code' => 'pazysalvo',
+        return Http::response(['data' => $current ?? ['issuer' => config('aaud-oauth.issuer'), 'subject' => 'subject-A', 'application_code' => 'pazysalvo',
             'application_user_id' => null, 'exists' => false, 'is_active' => false, 'roles' => [], 'version' => 0]]);
     }
     $sent++;

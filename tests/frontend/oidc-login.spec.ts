@@ -4,7 +4,7 @@ import { resolve, sep } from 'node:path';
 
 async function fixture(page: Page, enabled: boolean) {
     const build = process.env.SSO_UI_BUILD_DIR;
-    if (!build?.startsWith('/tmp/')) throw new Error('A temporary fixture build is required.');
+    if (!build || !(build.startsWith('/tmp/') || build.startsWith(process.cwd() + '/docs/rename-evidence/'))) throw new Error('A temporary fixture build is required.');
     const manifest = JSON.parse(await readFile(resolve(build, 'manifest.json'), 'utf8'));
     const requests: { method: string; inertia: boolean }[] = [];
     await page.route('**/*', async (route) => {
@@ -33,7 +33,7 @@ async function fixture(page: Page, enabled: boolean) {
 
 test('SSO and email/password login remain separately available', async ({ page }) => {
     await fixture(page, true);
-    await expect(page.getByRole('link', { name: 'Iniciar sesión con AAUD AUTH' })).toHaveAttribute('href', '/auth/aaud/redirect');
+    await expect(page.getByRole('link', { name: 'Iniciar sesión con AAUD OAUTH' })).toHaveAttribute('href', '/auth/aaud/redirect');
     await expect(page.locator('input[name="email"]')).toBeVisible();
     await expect(page.locator('input[name="password"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ingresar', exact: true })).toBeVisible();
@@ -42,7 +42,7 @@ test('SSO and email/password login remain separately available', async ({ page }
 
 test('disabled SSO leaves the existing local form available', async ({ page }) => {
     await fixture(page, false);
-    await expect(page.getByRole('link', { name: 'Iniciar sesión con AAUD AUTH' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Iniciar sesión con AAUD OAUTH' })).toHaveCount(0);
     await expect(page.locator('input[name="email"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ingresar', exact: true })).toBeEnabled();
 });
@@ -51,7 +51,7 @@ for (const mobile of [false, true]) {
     test(`OIDC starts a normal navigation by keyboard ${mobile ? 'mobile' : 'desktop'}`, async ({ page }) => {
         await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 });
         const requests = await fixture(page, true);
-        const button = page.getByRole('link', { name: 'Iniciar sesión con AAUD AUTH' });
+        const button = page.getByRole('link', { name: 'Iniciar sesión con AAUD OAUTH' });
         await button.focus();
         await expect(button).toBeFocused();
         const box = await button.boundingBox();

@@ -36,7 +36,7 @@ class UserSsoIdentityTest extends TestCase
     {
         parent::setUp();
         Http::preventStrayRequests();
-        config(['aaud-auth' => ['enabled' => true, 'api_url' => 'https://auth.example.test',
+        config(['aaud-oauth' => ['enabled' => true, 'api_url' => 'https://auth.example.test',
             'issuer' => self::ISSUER, 'token_url' => self::ISSUER.'/protocol/openid-connect/token',
             'client_id' => 'pazysalvo-sync', 'client_secret' => 'fixture-secret', 'connect_timeout' => 5,
             'timeout' => 10, 'verify_tls' => true, 'ca_bundle' => null, 'token_expiry_leeway' => 30]]);
@@ -98,7 +98,7 @@ class UserSsoIdentityTest extends TestCase
         $this->assertSame($this->actor->id, $audit->actor_user_id);
         $this->assertSame('success', $audit->result);
         $this->assertSame('verified-subject', $audit->metadata['subject']);
-        config(['aaud-auth.enabled' => false]);
+        config(['aaud-oauth.enabled' => false]);
         $this->delete($this->url(), ['identity_id' => $identity->id, 'confirmed' => true])->assertSessionHasNoErrors()->assertRedirect();
         $this->assertDatabaseCount('user_sso_identities', 0);
         $after = $this->target->fresh()->getAttributes();
@@ -195,7 +195,7 @@ class UserSsoIdentityTest extends TestCase
         $this->getJson('/admin/sso-directory?query=directory')->assertStatus(503);
         $this->post($this->url(), $this->selection())->assertSessionHasErrors('identity');
         $this->assertDatabaseCount('user_sso_identities', 0);
-        config(['aaud-auth.enabled' => false]);
+        config(['aaud-oauth.enabled' => false]);
         Http::fake();
         $this->post($this->url(), $this->selection())->assertSessionHasErrors('identity');
         Http::assertNothingSent();
@@ -549,7 +549,7 @@ class UserSsoIdentityTest extends TestCase
 
     public function test_creation_without_sso_preserves_local_password_role_and_state_without_http(): void
     {
-        config(['aaud-auth.enabled' => false]);
+        config(['aaud-oauth.enabled' => false]);
         $this->post('/admin/users', $this->creation(['is_active' => false]))->assertSessionHasNoErrors()->assertRedirect();
         $user = User::where('email', 'explicit-local@example.test')->sole();
         $this->assertFalse($user->is_active);
@@ -588,11 +588,11 @@ class UserSsoIdentityTest extends TestCase
 
     public function test_disabled_directory_and_duplicate_identity_cannot_leave_partial_new_accounts(): void
     {
-        config(['aaud-auth.enabled' => false]);
+        config(['aaud-oauth.enabled' => false]);
         $this->post('/admin/users', $this->creation(['sso_identity' => $this->selection()]))->assertSessionHasErrors('identity');
         Http::assertNothingSent();
         $this->assertDatabaseMissing('users', ['email' => 'explicit-local@example.test']);
-        config(['aaud-auth.enabled' => true]);
+        config(['aaud-oauth.enabled' => true]);
         $this->directory();
         UserSsoIdentity::create(['user_id' => $this->target->id, 'issuer' => self::ISSUER, 'subject' => 'verified-subject']);
         $this->post('/admin/users', $this->creation(['sso_identity' => $this->selection()]))->assertSessionHasErrors('identity');

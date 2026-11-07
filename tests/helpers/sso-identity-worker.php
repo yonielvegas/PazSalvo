@@ -19,7 +19,7 @@ if (! app()->environment('testing') || config('database.default') !== 'pgsql'
 }
 [$script, $operation, $actorId, $userId, $subject, $ready, $release] = $argv;
 $issuer = 'https://keycloak.example.test/realms/aaud';
-config(['aaud-auth' => ['enabled' => true, 'api_url' => 'https://auth.example.test', 'issuer' => $issuer,
+config(['aaud-oauth' => ['enabled' => true, 'api_url' => 'https://auth.example.test', 'issuer' => $issuer,
     'token_url' => $issuer.'/protocol/openid-connect/token', 'client_id' => 'pazysalvo-sync', 'client_secret' => 'fixture-secret',
     'connect_timeout' => 5, 'timeout' => 10, 'verify_tls' => true, 'ca_bundle' => null, 'token_expiry_leeway' => 30]]);
 Http::preventStrayRequests();

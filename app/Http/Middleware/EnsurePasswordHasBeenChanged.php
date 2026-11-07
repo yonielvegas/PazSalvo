@@ -12,7 +12,7 @@ class EnsurePasswordHasBeenChanged
     {
         $user = $request->user();
 
-        if (! $user || ! $user->must_change_password || $request->session()->get('auth_method') === 'oidc') {
+        if (! $user || ! $user->local_login_enabled || ! $user->must_change_password || $request->session()->get('auth_method') === 'oidc') {
             return $next($request);
         }
 

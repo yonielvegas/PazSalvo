@@ -1,9 +1,9 @@
 <?php
 
-use App\Integrations\AaudAuth\Access\AccessOutbox;
-use App\Integrations\AaudAuth\Access\AccessSnapshot;
-use App\Integrations\AaudAuth\Exceptions\AccessPersistenceException;
-use App\Integrations\AaudAuth\Http\UserAccessResult;
+use App\Integrations\AaudOauth\Access\AccessOutbox;
+use App\Integrations\AaudOauth\Access\AccessSnapshot;
+use App\Integrations\AaudOauth\Exceptions\AccessPersistenceException;
+use App\Integrations\AaudOauth\Http\UserAccessResult;
 use App\Models\User;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +17,7 @@ if (! app()->environment('testing') || config('database.default') !== 'pgsql'
     || DB::selectOne('select current_database() as name')->name !== config('database.connections.pgsql.database')) {
     throw new RuntimeException('Isolated testing database required');
 }
-config(['aaud-auth.issuer' => 'https://keycloak.example.test/realms/aaud']);
+config(['aaud-oauth.issuer' => 'https://keycloak.example.test/realms/aaud']);
 Http::preventStrayRequests();
 Http::fake(fn () => throw new RuntimeException('HTTP forbidden'));
 [$script, $mode, $id, $actor, $ready, $release] = $argv;

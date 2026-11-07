@@ -15,9 +15,9 @@ async function body(request: Request): Promise<Record<string, unknown>> {
     return request.postDataJSON();
 }
 
-async function fixture(page: Page, options: { sync?: 'pending' | 'error' | 'confirmed'; linked?: boolean; available?: boolean; conflict?: boolean; unavailable?: boolean; networkError?: boolean; fallback?: boolean; missingEmail?: boolean; legacy?: boolean; empty?: boolean; paged?: boolean } = {}) {
+async function fixture(page: Page, options: { localLogin?: boolean; resetFails?: boolean; sync?: 'pending' | 'error' | 'confirmed'; linked?: boolean; available?: boolean; conflict?: boolean; unavailable?: boolean; networkError?: boolean; fallback?: boolean; missingEmail?: boolean; legacy?: boolean; empty?: boolean; paged?: boolean } = {}) {
     const build = process.env.SSO_UI_BUILD_DIR;
-    if (!build || !build.startsWith('/tmp/')) throw new Error('Build into /tmp and set SSO_UI_BUILD_DIR first.');
+    if (!build || !(build.startsWith('/tmp/') || build.startsWith(process.cwd() + '/docs/rename-evidence/'))) throw new Error('Set SSO_UI_BUILD_DIR to an isolated fixture build first.');
     const manifest = JSON.parse(await readFile(resolve(build, 'manifest.json'), 'utf8'));
     const profile = { username: verified.username, ...(!options.fallback ? { name: verified.name } : {}), ...(!options.missingEmail ? { email: verified.email } : {}) };
     let linked = options.linked ?? false;
@@ -29,11 +29,11 @@ async function fixture(page: Page, options: { sync?: 'pending' | 'error' | 'conf
     const user = { id: 42, name: linked && !options.legacy ? profile.name ?? 'Local User' : 'Local User',
         username: linked && !options.legacy ? profile.username : 'local.user',
         email: linked && !options.legacy ? profile.email ?? 'local@example.test' : 'local@example.test', agency_id: 1, agency: 'Fixture', role: 'operador',
-        is_active: true, created_at: createdAt, has_active_general_admin_signature: false, has_any_general_admin_signature: false, login_attempts: 0,
+        local_login_enabled: options.localLogin ?? true, is_active: true, created_at: createdAt, has_active_general_admin_signature: false, has_any_general_admin_signature: false, login_attempts: 0,
         is_login_blocked: false, must_change_password: false, has_active_session: false, active_session_count: 0, active_session_last_activity: null };
     let extraUser: Record<string, unknown> | null = null;
     function inertia(errors = {}) {
-        const sync = options.sync === 'error' ? 'Cambio local guardado. Error de sincronización que requiere atención.' : options.sync === 'pending' ? 'Cambio local guardado, sincronización con AAUD AUTH pendiente.' : options.sync === 'confirmed' ? 'Sincronizado correctamente con AAUD AUTH.' : null;
+        const sync = options.sync === 'error' ? 'Cambio local guardado. Error de sincronización que requiere atención.' : options.sync === 'pending' ? 'Cambio local guardado, sincronización con AAUD OAUTH pendiente.' : options.sync === 'confirmed' ? 'Sincronizado correctamente con AAUD OAUTH.' : null;
         const current = { ...user, sso_linked: linked, sso_identity: identity(), sso_sync: sync };
         return { component: 'admin/users/index', url: '/admin/users', version: null, clearHistory: false, encryptHistory: false,
             props: { errors, flash: {}, auth: { user: { name: 'Admin Fixture', agency: null, permissions: ['administrar usuarios'] } },
@@ -70,12 +70,17 @@ async function fixture(page: Page, options: { sync?: 'pending' | 'error' | 'conf
         if (request.method() === 'POST' && ['/admin/users', '/admin/users/42'].includes(url.pathname)) {
             const data = await body(request); mutations.push({ method: 'POST', path: url.pathname, body: data });
             if (!options.conflict) {
-                if (url.pathname === '/admin/users') extraUser = { ...user, id: 43, name: data.name, email: data.email, username: data.username, sso_linked: !!data['sso_identity[subject]'], sso_identity: null };
+                if (url.pathname === '/admin/users') extraUser = { ...user, id: 43, name: data.name, email: data.email, username: data.username, sso_linked: !!data['sso_identity[subject]'], sso_identity: null, local_login_enabled: !data['sso_identity[subject]'] };
                 else { linked = data.sso_action === 'unlink' ? false : data.sso_action === 'link' ? true : linked;
                     Object.assign(user, { name: data.name, email: data.email, username: data.username }); }
             }
             if (options.networkError) return route.abort('failed');
             return route.fulfill({ headers: { 'X-Inertia': 'true' }, json: inertia(options.conflict ? { username: 'El username ya pertenece a otro usuario.' } : {}) });
+        }
+        if (request.method() === 'PATCH' && url.pathname === '/admin/users/42/reset-password') {
+            mutations.push({ method: 'PATCH', path: url.pathname, body: await body(request) });
+            if (!options.resetFails) Object.assign(user, { local_login_enabled: true, must_change_password: true });
+            return route.fulfill({ headers: { 'X-Inertia': 'true' }, json: inertia(options.resetFails ? { temporary_password: 'No se completó el restablecimiento.' } : {}) });
         }
         unexpected.push(`${request.method()} ${request.url()}`); return route.abort();
     });
@@ -84,7 +89,7 @@ async function fixture(page: Page, options: { sync?: 'pending' | 'error' | 'conf
     return { mutations, unexpected, browserErrors };
 }
 
-const toggle = (page: Page) => page.getByRole('switch', { name: 'Vincular con AAUD AUTH' });
+const toggle = (page: Page) => page.getByRole('switch', { name: 'Vincular con AAUD OAUTH' });
 async function selectIdentity(page: Page) {
     if (await toggle(page).getAttribute('aria-checked') === 'false') await toggle(page).click();
     await page.getByLabel('Buscar usuario en Active Directory').fill('directory');
@@ -200,7 +205,7 @@ test('unlink is pending until save and explicit confirmation, with local usernam
     await expect(page.locator('#edit-username')).toHaveValue('directory-user');
     expect(f.mutations).toEqual([]);
     await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Guardar desvinculación de AAUD AUTH' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Guardar desvinculación de AAUD OAUTH' })).toBeVisible();
     expect(f.mutations).toEqual([]);
     await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
     await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
@@ -368,3 +373,59 @@ for (const sync of ['pending', 'error', 'confirmed'] as const) {
         }
     });
 }
+
+for (const mobile of [false, true]) {
+    test(`SSO-only reset warning is red and disappears only after completed reset ${mobile ? 'mobile' : 'desktop'}`, async ({ page }) => {
+        await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 });
+        const f = await fixture(page, { linked: true, localLogin: false });
+        await page.getByRole('button', { name: 'Restablecer contraseña', exact: true }).click();
+        const warning = page.locator('.local-login-security-warning');
+        await expect(warning).toBeVisible();
+        await expect(warning).toHaveAttribute('role', 'alert');
+        await expect(warning).toHaveCSS('background-color', 'rgb(254, 242, 242)');
+        await expect(warning).toHaveCSS('border-top-color', 'rgb(185, 28, 28)');
+        await expect(warning).toContainText('ADVERTENCIA DE SEGURIDAD');
+        await expect(warning).toContainText('correo y contraseña');
+        expect(f.mutations).toEqual([]);
+        const box = await warning.boundingBox();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(mobile ? 390 : 1280);
+        await page.getByRole('button', { name: 'Confirmar restablecimiento', exact: true }).click();
+        await expect(page.getByText('Contraseña restablecida correctamente', { exact: true })).toBeVisible();
+        await page.getByRole('button', { name: 'Cerrar', exact: true }).last().click();
+        await page.getByRole('button', { name: 'Restablecer contraseña', exact: true }).click();
+        await expect(warning).toHaveCount(0);
+        expect(f.mutations).toHaveLength(1); safe(f);
+    });
+}
+
+test('linked users with local login enabled retain the ordinary reset modal without warning', async ({ page }) => {
+    const f = await fixture(page, { linked: true, localLogin: true });
+    await page.getByRole('button', { name: 'Restablecer contraseña', exact: true }).click();
+    await expect(page.locator('.local-login-security-warning')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Confirmar restablecimiento', exact: true })).toBeVisible();
+    expect(f.mutations).toEqual([]); safe(f);
+});
+
+test('cancelled or failed resets never hide the SSO-only warning or show success', async ({ page }) => {
+    const f = await fixture(page, { linked: true, localLogin: false, resetFails: true });
+    await page.getByRole('button', { name: 'Restablecer contraseña', exact: true }).click();
+    await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
+    expect(f.mutations).toEqual([]);
+    await page.getByRole('button', { name: 'Restablecer contraseña', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirmar restablecimiento', exact: true }).click();
+    await expect(page.locator('.local-login-security-warning')).toBeVisible();
+    await expect(page.getByText('No se completó el restablecimiento.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Contraseña restablecida correctamente', { exact: true })).toHaveCount(0);
+    safe(f);
+});
+
+test('new SSO creation never presents a generic password; switching off restores local creation', async ({ page }) => {
+    const f = await fixture(page);
+    await page.getByRole('button', { name: 'Nuevo usuario', exact: true }).click();
+    await expect(page.getByText('Acceso exclusivo mediante AAUD OAUTH.', { exact: true })).toBeVisible();
+    await expect(page.getByText('Contraseña temporal: fixture-only', { exact: true })).toHaveCount(0);
+    await toggle(page).click();
+    await expect(page.getByText('Contraseña temporal: fixture-only', { exact: true })).toBeVisible();
+    expect(f.mutations).toEqual([]); safe(f);
+});

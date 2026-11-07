@@ -1,0 +1,7 @@
+{
+    "preset": "laravel",
+    "exclude": [
+        "docs/rename-evidence",
+        "docs/php-security-validation"
+    ]
+}

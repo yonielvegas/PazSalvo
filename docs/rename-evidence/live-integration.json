@@ -1,0 +1,2 @@
+{"user":"Ricardo Vargas","local_role":["operador"],"remote":{"data":{"issuer":"http:\/\/localhost:8080\/realms\/aaud","subject":"1a454d3f-5500-47a7-bf9c-bff9a1292f4b","application_code":"pazysalvo","application_user_id":"15","exists":true,"is_active":true,"roles":["operador"],"version":4}}}
+{"user":"Ana Duarte","local_role":["consulta"],"remote":{"data":{"issuer":"http:\/\/localhost:8080\/realms\/aaud","subject":"8278af94-054b-47f0-8c31-0af131cf89fa","application_code":"pazysalvo","application_user_id":"16","exists":true,"is_active":true,"roles":["consulta"],"version":2}}}

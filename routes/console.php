@@ -9,4 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // Persistent recovery; immediate delivery also runs after each administrative commit.
-Schedule::command('aaud-auth:deliver')->everyMinute()->withoutOverlapping(10);
+Schedule::command('aaud-oauth:deliver')->everyMinute()->withoutOverlapping(10);

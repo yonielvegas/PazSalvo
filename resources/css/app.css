@@ -547,3 +547,8 @@ table { width: 100%; border-collapse: collapse; } th, td { padding: 13px 15px; b
 .login-sso-button:hover { background: #e7f4f1; border-color: #0f766e; }
 .login-sso-button:focus-visible { outline: 3px solid #0f766e; outline-offset: 3px; }
 .login-sso-button svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+.local-login-security-warning { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 16px; margin-bottom: 16px; border: 2px solid #b91c1c; border-radius: 12px; background: #fef2f2; color: #7f1d1d; text-align: left; overflow-wrap: anywhere; }
+.local-login-security-warning > svg { flex-shrink: 0; width: 24px; height: 24px; color: #991b1b; }
+.local-login-security-warning strong { display: block; font-weight: 800; color: #991b1b; }
+.local-login-security-warning p { margin: 8px 0 0; line-height: 1.5; }

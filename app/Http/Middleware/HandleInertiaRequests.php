@@ -14,8 +14,8 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user()?->loadMissing('agency');
 
-        return [...parent::share($request), 'oidc_login_enabled' => config('aaud-oidc.enabled') === true, 'globalStatistics' => fn () => $user?->can('ver historial') ? app(PazSalvoStatistics::class)->global() : null, 'auth' => ['user' => $user ? [
-            'id' => $user->id, 'name' => $user->name, 'email' => $user->email,
+        return [...parent::share($request), 'globalStatistics' => fn () => $user?->can('ver historial') ? app(PazSalvoStatistics::class)->global() : null, 'auth' => ['user' => $user ? [
+            'id' => $user->id, 'name' => $user->name, 'email' => $user->email, 'local_login_enabled' => $user->local_login_enabled,
             'agency' => $user->agency?->only(['id', 'name']), 'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),
         ] : null], 'flash' => [

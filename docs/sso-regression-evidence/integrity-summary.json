@@ -1,0 +1,25 @@
+{
+  "exact_comparisons": {
+    "users": false,
+    "roles": true,
+    "permissions": true,
+    "model_has_roles": true,
+    "role_has_permissions": true,
+    "user_sso_identities": true,
+    "aaud_auth_catalog_states": true,
+    "aaud_auth_catalog_operations": true,
+    "aaud_auth_access_states": true,
+    "aaud_auth_access_targets": true,
+    "aaud_auth_access_operations": true,
+    "migrations": true,
+    "verified_users": true
+  },
+  "user_count_unchanged": true,
+  "concurrent_operational_login": {
+    "user_id": 14,
+    "event": "login.sso.succeeded",
+    "at": "2026-10-29 14:48:41",
+    "session_version_observed": 18
+  },
+  "note": "Users full-row fingerprint changed during a real operational login; authorization, identity, outbox and migration fingerprints remain identical."
+}

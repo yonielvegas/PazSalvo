@@ -14,9 +14,10 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
     },
     webServer: {
-        command: 'php artisan serve --host=127.0.0.1 --port=8012',
+        command: 'php -S 127.0.0.1:8012 -t public tests/e2e/server.php',
+        env: { APP_ENV: 'testing', E2E_SSO_DIRECTORY_FIXTURE: '1', E2E_SSO_RUN_ID: `${process.pid}-${Date.now()}` },
         url: 'http://127.0.0.1:8012/login',
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
         timeout: 30_000,
     },
 });

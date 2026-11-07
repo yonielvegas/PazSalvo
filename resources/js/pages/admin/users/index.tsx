@@ -12,6 +12,7 @@ type User = {
     email: string;
     username: string | null;
     is_active: boolean;
+    local_login_enabled: boolean;
     sso_linked: boolean;
     sso_sync?: string | null;
     sso_identity: SsoLink | null;
@@ -69,6 +70,7 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
     const [toggleReplaceName, setToggleReplaceName] = useState('');
     const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
     const [resetPasswordComplete, setResetPasswordComplete] = useState(false);
+    const [resetPasswordError, setResetPasswordError] = useState('');
     const [temporaryPasswordCopied, setTemporaryPasswordCopied] = useState(false);
     const createInstitutional = createSsoEnabled ? createProfile : {};
     const editInstitutional = editSsoEnabled ? editProfile : {};
@@ -292,6 +294,7 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
     const openResetPassword = useCallback((user: User) => {
         setResetPasswordUser(user);
         setResetPasswordComplete(false);
+        setResetPasswordError('');
         setTemporaryPasswordCopied(false);
     }, []);
 
@@ -299,13 +302,16 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
         if (!resetPasswordUser || processing === 'reset-password') return;
 
         setProcessing('reset-password');
+        setResetPasswordError('');
         router.patch(`/admin/users/${resetPasswordUser.id}/reset-password`, {}, {
             preserveState: true,
             preserveScroll: true,
             onSuccess: () => {
+                setResetPasswordUser((current) => current ? { ...current, local_login_enabled: true } : null);
                 setResetPasswordComplete(true);
                 setDismissed(false);
             },
+            onError: (errors) => setResetPasswordError(Object.values(errors)[0] || 'No se completó el restablecimiento. El acceso local no cambió.'),
             onFinish: () => setProcessing(null),
         });
     }, [resetPasswordUser, processing]);
@@ -499,18 +505,18 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
                     <div className="form-group">
                         <label htmlFor="create-name">Nombre completo</label>
                         <input id="create-name" value={createInstitutional.name ?? createForm.name} readOnly={createLocks.has('name')} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} required />
-                        {createLocks.has('name') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {createLocks.has('name') && <small className="sso-help">Verificado por AAUD OAUTH</small>}
                         {createErrors.name && <p className="field-error">{createErrors.name}</p>}
                     </div>
                     <div className="form-group">
                         <label htmlFor="create-email">Correo electronico</label>
                         <input id="create-email" type="email" value={createInstitutional.email ?? createForm.email} readOnly={createLocks.has('email')} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} required />
-                        {createLocks.has('email') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {createLocks.has('email') && <small className="sso-help">Verificado por AAUD OAUTH</small>}
                         {createErrors.email && <p className="field-error">{createErrors.email}</p>}
                     </div>
                     <div className="form-group"><label htmlFor="create-username">Usuario (username)</label>
                         <input id="create-username" value={createInstitutional.username ?? createForm.username} readOnly={createLocks.has('username')} maxLength={255} onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })} />
-                        {createLocks.has('username') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {createLocks.has('username') && <small className="sso-help">Verificado por AAUD OAUTH</small>}
                         {createErrors.username && <p className="field-error">{createErrors.username}</p>}
                     </div>
                     <div className="form-row">
@@ -534,8 +540,7 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
                     <div className="temporary-password-note" role="note">
                         <KeyRound size={18} />
                         <div>
-                            <strong>Contraseña temporal: {temporary_password}</strong>
-                            <span>El usuario deberá crear una contraseña personal en su primer inicio de sesión.</span>
+                            {createSsoEnabled ? <><strong>Acceso exclusivo mediante AAUD OAUTH.</strong><span>No se genera una contraseña local. Un administrador podrá habilitarla posteriormente mediante Restablecer contraseña.</span></> : <><strong>Contraseña temporal: {temporary_password}</strong><span>El usuario deberá crear una contraseña personal en su primer inicio de sesión.</span></>}
                         </div>
                     </div>
                     <div className="form-group" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -607,19 +612,19 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
                     <div className="form-group">
                         <label htmlFor="edit-name">Nombre completo</label>
                         <input id="edit-name" value={editInstitutional.name ?? editForm.name} readOnly={editLocks.has('name')} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
-                        {editLocks.has('name') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {editLocks.has('name') && <small className="sso-help">Verificado por AAUD OAUTH</small>}
                         {editErrors.name && <p className="field-error">{editErrors.name}</p>}
                     </div>
                     <div className="form-group">
                         <label htmlFor="edit-email">Correo electronico</label>
                         <input id="edit-email" type="email" value={editInstitutional.email ?? editForm.email} readOnly={editLocks.has('email')} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
-                        {editLocks.has('email') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {editLocks.has('email') && <small className="sso-help">Verificado por AAUD OAUTH</small>}
                         {editErrors.email && <p className="field-error">{editErrors.email}</p>}
                     </div>
                     <div className="form-group"><label htmlFor="edit-username">Usuario (username)</label>
                         <input id="edit-username" value={editInstitutional.username ?? editForm.username} readOnly={editLocks.has('username') || (editUser?.sso_linked === true && !editSsoEnabled)} maxLength={255} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} />
                         {editUser?.sso_linked && !editSsoEnabled && <small className="sso-help">Al desvincular se conserva el username actual. Podrá editarlo después de guardar.</small>}
-                        {editLocks.has('username') && <small className="sso-help">Verificado por AAUD AUTH</small>}
+                        {editLocks.has('username') && <small className="sso-help">Verificado por AAUD OAUTH</small>}
                         {editErrors.username && <p className="field-error">{editErrors.username}</p>}
                     </div>
                     <div className="form-row">
@@ -695,7 +700,7 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
             </Modal>
 
             <ConfirmDialog open={editUnlinkConfirm} onClose={() => setEditUnlinkConfirm(false)} onConfirm={() => submitEdit(true)}
-                title="Guardar desvinculación de AAUD AUTH" confirmLabel="Confirmar y guardar" processing={processing === 'edit'}
+                title="Guardar desvinculación de AAUD OAUTH" confirmLabel="Confirmar y guardar" processing={processing === 'edit'}
                 message="Se guardarán los cambios del formulario y se desvinculará la identidad. El usuario, username, contraseña, rol, agencia e historial se conservarán salvo los cambios locales expresamente realizados." />
 
             <ConfirmDialog
@@ -736,6 +741,16 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
             >
                 {!resetPasswordComplete ? (
                     <div className="confirm-body">
+                        {resetPasswordUser?.local_login_enabled === false && <div className="local-login-security-warning" role="alert">
+                            <AlertTriangle aria-hidden="true" />
+                            <div><strong>ADVERTENCIA DE SEGURIDAD</strong>
+                                <p><b>Este usuario tiene deshabilitado el inicio de sesión local.</b></p>
+                                <p>Al completar el restablecimiento de contraseña, se habilitará el inicio de sesión mediante correo y contraseña en Paz y Salvo.</p>
+                                <p>El usuario podrá acceder tanto con AAUD OAUTH como con sus credenciales locales.</p>
+                            </div>
+                        </div>}
+                        {resetPasswordError && <div className="notice error" role="alert">{resetPasswordError}</div>}
+                        {!temporary_password && <div className="notice error" role="alert">La contraseña temporal no está configurada. No se puede completar el restablecimiento ni habilitar el acceso local.</div>}
                         <div className="confirm-icon"><KeyRound /></div>
                         <p className="confirm-message">
                             Se desbloqueará la cuenta, se cerrarán sus sesiones activas y su contraseña será restablecida temporalmente. El usuario deberá crear una nueva contraseña al iniciar sesión.
@@ -747,7 +762,7 @@ export default function UsersIndex({ users, agencies, roles, temporary_password,
                         <p className="field-help">Entrega esta información únicamente al usuario correspondiente.</p>
                         <div className="modal-footer">
                             <button type="button" className="btn-secondary" onClick={() => setResetPasswordUser(null)} disabled={processing === 'reset-password'}>Cancelar</button>
-                            <button type="button" onClick={handleResetPassword} disabled={processing === 'reset-password'}>
+                            <button type="button" onClick={handleResetPassword} disabled={processing === 'reset-password' || !temporary_password}>
                                 {processing === 'reset-password' ? <span className="button-spinner" aria-hidden="true" /> : <KeyRound size={16} />}
                                 {processing === 'reset-password' ? 'Restableciendo…' : 'Confirmar restablecimiento'}
                             </button>

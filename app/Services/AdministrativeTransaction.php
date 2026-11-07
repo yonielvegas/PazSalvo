@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Integrations\AaudAuth\Access\AccessDelivery;
-use App\Integrations\AaudAuth\Access\AccessOutbox;
-use App\Integrations\AaudAuth\Access\AccessSnapshotBuilder;
+use App\Integrations\AaudOauth\Access\AccessDelivery;
+use App\Integrations\AaudOauth\Access\AccessOutbox;
+use App\Integrations\AaudOauth\Access\AccessSnapshotBuilder;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
@@ -24,7 +24,7 @@ final class AdministrativeTransaction
     /** Capture before a mutation; publish only the final state of the outer transaction. */
     public static function accessChanged(User $user, ?array $previous = null, ?User $actor = null): void
     {
-        if (! config('aaud-auth.automatic')) {
+        if (! config('aaud-oauth.automatic')) {
             return;
         }
         $identity = $user->ssoIdentity()->first();
@@ -49,7 +49,7 @@ final class AdministrativeTransaction
         if ($owners !== []) {
             DB::afterCommit(function () use ($owners) {
                 // Delivery failures cannot undo a committed local change. The Outbox remains recoverable.
-                $message = 'Cambio local guardado, sincronización con AAUD AUTH pendiente.';
+                $message = 'Cambio local guardado, sincronización con AAUD OAUTH pendiente.';
                 try {
                     foreach ($owners as $owner) {
                         app(AccessDelivery::class)->deliver((string) $owner);
@@ -58,7 +58,7 @@ final class AdministrativeTransaction
                 } catch (Throwable $failure) {
                     // Even a storage outage during delivery must not enter filesystem rollback compensation
                     // after the local transaction has already committed.
-                    Log::error('AAUD AUTH post-commit recovery required.', ['exception_class' => $failure::class]);
+                    Log::error('AAUD OAUTH post-commit recovery required.', ['exception_class' => $failure::class]);
                 }
                 if (app()->bound('request') && request()->hasSession()) {
                     request()->session()->flash('sso_sync', $message);

@@ -1,0 +1,3 @@
+{"user_id":14,"roles":["admin"],"can_landing":true}
+{"user_id":15,"roles":["operador"],"can_landing":true}
+{"user_id":16,"roles":["consulta"],"can_landing":true}

@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SsoIdentityLinkRequest;
-use App\Integrations\AaudAuth\Access\AccessDelivery;
-use App\Integrations\AaudAuth\Exceptions\AaudAuthRequestException;
-use App\Integrations\AaudAuth\Exceptions\TechnicalAuthenticationException;
+use App\Integrations\AaudOauth\Access\AccessDelivery;
+use App\Integrations\AaudOauth\Exceptions\AaudOauthRequestException;
+use App\Integrations\AaudOauth\Exceptions\TechnicalAuthenticationException;
 use App\Models\Agency;
 use App\Models\GeneralAdminSignature;
 use App\Models\Role;
@@ -51,8 +51,9 @@ class AdminUserController extends Controller
                     'email' => $user->email,
                     'username' => $user->username,
                     'is_active' => $user->is_active,
+                    'local_login_enabled' => $user->local_login_enabled,
                     'sso_linked' => $user->ssoIdentity !== null,
-                    'sso_sync' => config('aaud-auth.automatic') && DB::table('aaud_auth_access_targets')->where('application_user_id', (string) $user->id)->exists()
+                    'sso_sync' => config('aaud-oauth.automatic') && DB::table('aaud_auth_access_targets')->where('application_user_id', (string) $user->id)->exists()
                         ? app(AccessDelivery::class)->message([(string) $user->id]) : null,
                     'sso_identity' => $user->ssoIdentity ? ['id' => $user->ssoIdentity->id, 'issuer' => $user->ssoIdentity->issuer,
                         'subject' => $user->ssoIdentity->subject, 'linked_at' => $user->ssoIdentity->created_at->toIso8601String(),
@@ -72,12 +73,12 @@ class AdminUserController extends Controller
                     'generated_paz_salvos_count' => $user->generated_paz_salvos_count,
                 ];
             }),
-            'sso_sync_attention_count' => config('aaud-auth.automatic')
+            'sso_sync_attention_count' => config('aaud-oauth.automatic')
                 ? DB::table('aaud_auth_access_targets')->where('delivery_error', 'needs_review')->count() : 0,
             'agencies' => Agency::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'roles' => Role::where('is_active', true)->orderBy('name')->pluck('name'),
-            'temporary_password' => $this->temporaryPassword(),
-            'sso_directory_available' => config('aaud-auth.enabled') === true && is_string(config('aaud-auth.issuer')) && config('aaud-auth.issuer') !== '',
+            'temporary_password' => (string) config('security.temporary_user_password'),
+            'sso_directory_available' => config('aaud-oauth.enabled') === true && is_string(config('aaud-oauth.issuer')) && config('aaud-oauth.issuer') !== '',
         ]);
     }
 
@@ -85,7 +86,7 @@ class AdminUserController extends Controller
     {
         Gate::authorize('manage-users');
         $selection = $this->identitySelection($request);
-        $create = function (array $profile = []) use ($request) {
+        $create = function (array $profile = []) use ($request, $selection) {
             $request->merge($profile);
             $this->normalizeUsername($request);
             Gate::authorize('manage-users');
@@ -99,7 +100,7 @@ class AdminUserController extends Controller
                 'general_admin_signature' => ['required_if:role,administrador_general', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             ]);
 
-            $user = AdministrativeTransaction::run(function () use ($request, $data) {
+            $user = AdministrativeTransaction::run(function () use ($request, $data, $selection) {
                 $data['is_active'] ??= true;
                 $role = $data['role'];
                 unset($data['role'], $data['general_admin_signature']);
@@ -125,10 +126,12 @@ class AdminUserController extends Controller
                     unset($data['general_admin_signature']);
                 }
 
-                $data['password'] = Hash::make($this->temporaryPassword());
-                $data['must_change_password'] = true;
-                $data['password_reset_at'] = now();
-                $data['password_reset_by'] = $request->user()->id;
+                $localLogin = $selection === null;
+                $data['local_login_enabled'] = $localLogin;
+                $data['password'] = $localLogin ? Hash::make($this->temporaryPassword()) : null;
+                $data['must_change_password'] = $localLogin;
+                $data['password_reset_at'] = $localLogin ? now() : null;
+                $data['password_reset_by'] = $localLogin ? $request->user()->id : null;
                 $data['password_changed_at'] = null;
                 $data['login_attempts'] = 0;
                 $data['is_login_blocked'] = false;
@@ -152,6 +155,9 @@ class AdminUserController extends Controller
                 return $user;
             });
 
+            if ($selection !== null) {
+                app(AuditLogger::class)->record('user.sso_only.created', ['target_user_id' => $user->id, 'local_login_enabled' => false], $user, $request, 'success');
+            }
             app(AuditLogger::class)->record('user.created', [
                 'target_user_id' => $user->id,
                 'email' => $user->email,
@@ -165,7 +171,7 @@ class AdminUserController extends Controller
             $this->compensated(fn () => $selection === null
                 ? AdministrativeTransaction::run($create)
                 : $identities->createAndLink($request->user(), $selection, $request, $create), $request, 'user.store');
-        } catch (AaudAuthRequestException|TechnicalAuthenticationException) {
+        } catch (AaudOauthRequestException|TechnicalAuthenticationException) {
             throw ValidationException::withMessages(['identity' => 'No se pudo verificar el directorio. No se creó el usuario. Puede cancelar la selección SSO y crear únicamente la cuenta local.']);
         }
 
@@ -278,13 +284,13 @@ class AdminUserController extends Controller
         };
         try {
             $this->compensated(fn () => $identities->updateWithIdentity($user, $request->user(), $operation, $request, $update), $request, 'user.update');
-        } catch (AaudAuthRequestException|TechnicalAuthenticationException) {
-            throw ValidationException::withMessages(['identity' => 'No se pudo verificar AAUD AUTH. No se guardó ningún cambio.']);
+        } catch (AaudOauthRequestException|TechnicalAuthenticationException) {
+            throw ValidationException::withMessages(['identity' => 'No se pudo verificar AAUD OAUTH. No se guardó ningún cambio.']);
         }
 
         return back()->with('message', match ($action) {
-            'link' => 'Usuario e identidad AAUD AUTH guardados correctamente.',
-            'unlink' => 'Usuario guardado e identidad AAUD AUTH desvinculada correctamente.',
+            'link' => 'Usuario e identidad AAUD OAUTH guardados correctamente.',
+            'unlink' => 'Usuario guardado e identidad AAUD OAUTH desvinculada correctamente.',
             default => 'Usuario actualizado correctamente.',
         });
     }
@@ -456,15 +462,18 @@ class AdminUserController extends Controller
             Gate::authorize('resetPassword', $user);
 
             $temporaryPassword = $this->temporaryPassword();
+            $audit->record('user.password_reset_requested', ['target_user_id' => $user->id], $user, $request, 'authorized');
 
             $result = AdministrativeTransaction::run(function () use ($request, $user, $temporaryPassword) {
                 $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $wasLocalLoginEnabled = (bool) $locked->local_login_enabled;
                 $wasBlocked = (bool) $locked->is_login_blocked;
                 $oldAttempts = (int) $locked->login_attempts;
                 $newVersion = ((int) $locked->session_version) + 1;
 
                 $locked->forceFill([
                     'password' => Hash::make($temporaryPassword),
+                    'local_login_enabled' => true,
                     'must_change_password' => true,
                     'password_reset_at' => now(),
                     'password_reset_by' => $request->user()->id,
@@ -480,12 +489,17 @@ class AdminUserController extends Controller
                 return [
                     'user' => $locked,
                     'was_blocked' => $wasBlocked,
+                    'was_local_login_enabled' => $wasLocalLoginEnabled,
                     'old_attempts' => $oldAttempts,
                     'sessions_deleted' => $sessionsDeleted,
                 ];
             });
 
             $target = $result['user'];
+            $audit->record('user.password_reset_completed', ['target_user_id' => $target->id], $target, $request, 'success');
+            if (! $result['was_local_login_enabled']) {
+                $audit->record('user.local_login_enabled', ['target_user_id' => $target->id, 'reason' => 'administrative_password_reset'], $target, $request, 'success');
+            }
             $audit->record('user.password_reset', [
                 'target_user_id' => $target->id,
                 'target_email' => $target->email,
@@ -509,7 +523,7 @@ class AdminUserController extends Controller
                 throw ValidationException::withMessages(['user' => 'No se puede borrar un usuario con certificados generados.']);
             }
             if ($identity = $user->ssoIdentity()->first()) {
-                if (! config('aaud-auth.automatic')) {
+                if (! config('aaud-oauth.automatic')) {
                     throw ValidationException::withMessages(['user' => 'Desvincule explícitamente la identidad SSO antes de borrar este usuario.']);
                 }
                 app(UserSsoIdentityManager::class)->unlink($user, $request->user(), $identity->id, $request);

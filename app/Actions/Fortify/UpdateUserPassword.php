@@ -4,6 +4,7 @@ namespace App\Actions\Fortify;
 
 use App\Models\User;
 use App\Services\AuditLogger;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -22,6 +23,8 @@ class UpdateUserPassword implements UpdatesUserPasswords
      */
     public function update(User $user, array $input): void
     {
+        $user->fresh()->assertLocalPasswordChangesAllowed();
+
         Validator::make($input, [
             'current_password' => ['required', 'string', 'current_password:web'],
             'password' => $this->passwordRules(),
@@ -29,11 +32,16 @@ class UpdateUserPassword implements UpdatesUserPasswords
             'current_password.current_password' => __('The provided password does not match your current password.'),
         ])->validateWithBag('updatePassword');
 
-        $user->forceFill([
-            'password' => Hash::make($input['password']),
-            'password_changed_at' => now(),
-            'session_version' => ((int) $user->session_version) + 1,
-        ])->save();
+        DB::transaction(function () use ($user, $input) {
+            $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $locked->assertLocalPasswordChangesAllowed();
+            $locked->forceFill([
+                'password' => Hash::make($input['password']),
+                'password_changed_at' => now(),
+                'session_version' => ((int) $locked->session_version) + 1,
+            ])->save();
+        });
+        $user->refresh();
 
         session()->put('auth_session_version', $user->session_version);
         app(AuditLogger::class)->record('password.changed', [], $user, request(), 'success');

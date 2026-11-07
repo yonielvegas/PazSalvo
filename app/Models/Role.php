@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use App\Integrations\AaudAuth\Access\AccessDelivery;
-use App\Integrations\AaudAuth\Roles\CatalogOutbox;
+use App\Integrations\AaudOauth\Access\AccessDelivery;
+use App\Integrations\AaudOauth\Roles\CatalogOutbox;
 use App\Services\AdministrativeTransaction;
 use App\Support\RoleCode;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +40,7 @@ class Role extends \Spatie\Permission\Models\Role
 
             $catalogChanged = ! $this->exists || $this->isDirty(['name', 'code', 'is_active', 'guard_name']);
             $saved = parent::save($options);
-            if ($saved && $catalogChanged && $this->guard_name === 'web' && config('aaud-auth.automatic')) {
+            if ($saved && $catalogChanged && $this->guard_name === 'web' && config('aaud-oauth.automatic')) {
                 $catalog = app(CatalogOutbox::class);
                 if (! app(AccessDelivery::class)->catalogNeedsReview() && $catalog->inspectLocalChanges()['needs_preparation']) {
                     $catalog->prepare();

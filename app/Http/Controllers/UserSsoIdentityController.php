@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SsoIdentityLinkRequest;
-use App\Integrations\AaudAuth\Exceptions\AaudAuthRequestException;
-use App\Integrations\AaudAuth\Exceptions\TechnicalAuthenticationException;
-use App\Integrations\AaudAuth\Http\AaudAuthClient;
+use App\Integrations\AaudOauth\Exceptions\AaudOauthRequestException;
+use App\Integrations\AaudOauth\Exceptions\TechnicalAuthenticationException;
+use App\Integrations\AaudOauth\Http\AaudOauthClient;
 use App\Models\User;
 use App\Services\UserSsoIdentityManager;
 use Illuminate\Http\JsonResponse;
@@ -25,18 +25,18 @@ class UserSsoIdentityController extends Controller
             'id' => $identity->id, 'issuer' => $identity->issuer, 'subject' => $identity->subject,
             'linked_at' => $identity->created_at->toIso8601String(),
             'verified_profile' => $identity->verified_profile,
-        ] : null, 'directory_available' => config('aaud-auth.enabled') === true && is_string(config('aaud-auth.issuer'))
-            && config('aaud-auth.issuer') !== ''])->header('Cache-Control', 'no-store, private');
+        ] : null, 'directory_available' => config('aaud-oauth.enabled') === true && is_string(config('aaud-oauth.issuer'))
+            && config('aaud-oauth.issuer') !== ''])->header('Cache-Control', 'no-store, private');
     }
 
-    public function search(Request $request, AaudAuthClient $client, UserSsoIdentityManager $manager): JsonResponse
+    public function search(Request $request, AaudOauthClient $client, UserSsoIdentityManager $manager): JsonResponse
     {
         Gate::authorize('manage-users');
         $data = $request->validate($this->searchRules());
         try {
             $results = $client->searchDirectory($data['query'], $data['page'] ?? 1);
             $results['data'] = array_map(fn ($row) => [...$row, 'verified_profile' => $manager->verifiedProfile($row)], $results['data']);
-        } catch (AaudAuthRequestException|TechnicalAuthenticationException) {
+        } catch (AaudOauthRequestException|TechnicalAuthenticationException) {
             return response()->json(['message' => $this->directoryError()], 503)->header('Cache-Control', 'no-store, private');
         }
 
@@ -49,7 +49,7 @@ class UserSsoIdentityController extends Controller
         $data = $request->validated();
         try {
             $manager->link($user, $request->user(), $data, $request);
-        } catch (AaudAuthRequestException|TechnicalAuthenticationException) {
+        } catch (AaudOauthRequestException|TechnicalAuthenticationException) {
             throw ValidationException::withMessages(['identity' => $this->directoryError()]);
         }
 
@@ -73,6 +73,6 @@ class UserSsoIdentityController extends Controller
 
     private function directoryError(): string
     {
-        return 'No se pudo verificar el directorio. Revise la configuración de AAUD AUTH, el emisor y la autorización directory.read del cliente técnico. No se ha vinculado ninguna identidad.';
+        return 'No se pudo verificar el directorio. Revise la configuración de AAUD OAUTH, el emisor y la autorización directory.read del cliente técnico. No se ha vinculado ninguna identidad.';
     }
 }

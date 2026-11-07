@@ -23,6 +23,10 @@ class AttemptToAuthenticateWithSpanishMessages
         $email = strtolower((string) $request->input(Fortify::username()));
         $user = User::where('email', $email)->first();
 
+        if ($user && ! $user->local_login_enabled) {
+            throw ValidationException::withMessages([Fortify::username() => ['Correo o contraseña incorrectos.']]);
+        }
+
         if ($user?->is_login_blocked) {
             $this->throwBlocked();
         }
@@ -36,6 +40,9 @@ class AttemptToAuthenticateWithSpanishMessages
 
             $user = DB::transaction(function () use ($user) {
                 $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                if (! $locked->local_login_enabled) {
+                    throw ValidationException::withMessages([Fortify::username() => ['Correo o contraseña incorrectos.']]);
+                }
                 $locked->forceFill([
                     'login_attempts' => 0,
                     'is_login_blocked' => false,

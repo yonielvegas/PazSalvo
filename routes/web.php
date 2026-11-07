@@ -5,6 +5,7 @@ use App\Http\Controllers\ClientExcelFileController;
 use App\Http\Controllers\ForcedPasswordChangeController;
 use App\Http\Controllers\HealthCheckController;
 use App\Http\Controllers\InstitutionalAccessController;
+use App\Http\Controllers\LogoutController;
 use App\Http\Controllers\OidcLoginController;
 use App\Http\Controllers\PazSalvoController;
 use App\Http\Controllers\PazSalvoHistoryController;
@@ -43,7 +44,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 });
 
-Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth')->name('logout');
+Route::post('/logout', LogoutController::class)->middleware('auth')->name('logout');
 
 Route::middleware(['auth', 'single.session', 'idle.timeout', 'internal.network'])->group(function () {
     Route::get('/cambiar-contrasena-obligatoria', [ForcedPasswordChangeController::class, 'edit'])->name('password.force-change');

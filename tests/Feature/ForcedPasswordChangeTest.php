@@ -160,7 +160,7 @@ class ForcedPasswordChangeTest extends TestCase
         $this->actingAs($user)
             ->withSession(['auth_session_version' => $user->session_version, 'authenticated_session_started_at' => now()->timestamp, 'session_regenerated_at' => now()->timestamp])
             ->post(route('logout'))
-            ->assertRedirect('/');
+            ->assertRedirect(route('login'));
     }
 
     public function test_forced_password_validation_rejects_configured_temporary_password(): void

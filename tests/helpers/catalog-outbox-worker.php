@@ -1,8 +1,8 @@
 <?php
 
-use App\Integrations\AaudAuth\Exceptions\CatalogPersistenceException;
-use App\Integrations\AaudAuth\Http\RoleCatalogResult;
-use App\Integrations\AaudAuth\Roles\CatalogOutbox;
+use App\Integrations\AaudOauth\Exceptions\CatalogPersistenceException;
+use App\Integrations\AaudOauth\Http\RoleCatalogResult;
+use App\Integrations\AaudOauth\Roles\CatalogOutbox;
 use App\Models\User;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\QueryException;

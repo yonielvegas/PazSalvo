@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Integrations\AaudAuth\Oidc\OidcAuthenticationException;
-use App\Integrations\AaudAuth\Oidc\OidcClient;
+use App\Integrations\AaudOauth\Oidc\OidcAuthenticationException;
+use App\Integrations\AaudOauth\Oidc\OidcClient;
 use App\Models\User;
 use App\Models\UserSsoIdentity;
 use App\Services\AdministrativeTransaction;
@@ -93,6 +93,6 @@ final class OidcLoginController extends Controller
             // Failing closed must not log a callback URL, code, token or provider exception.
         }
 
-        return redirect()->route('login')->with('error', 'No se pudo iniciar sesión con AAUD AUTH. Verifique su autorización o intente nuevamente.');
+        return redirect()->route('login')->with('error', 'No se pudo iniciar sesión con AAUD OAUTH. Verifique su autorización o intente nuevamente.');
     }
 }

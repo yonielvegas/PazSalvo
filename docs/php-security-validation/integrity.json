@@ -1,0 +1,15 @@
+{
+  "users": true,
+  "roles": true,
+  "permissions": true,
+  "model_has_roles": true,
+  "role_has_permissions": true,
+  "user_sso_identities": true,
+  "aaud_auth_catalog_states": true,
+  "aaud_auth_catalog_operations": true,
+  "aaud_auth_access_states": true,
+  "aaud_auth_access_targets": true,
+  "aaud_auth_access_operations": true,
+  "migrations": true,
+  "verified_users": true
+}

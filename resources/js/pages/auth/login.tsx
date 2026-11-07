@@ -24,7 +24,7 @@ export default function Login() {
                 <button disabled={processing}><LogIn /> {processing ? 'Ingresando…' : 'Ingresar'}</button>
             </>}
         </Form>
-        {oidc_login_enabled && <a href="/auth/aaud/redirect" className="login-sso-button"><ShieldCheck aria-hidden="true" />Iniciar sesión con AAUD AUTH</a>}
+        {oidc_login_enabled && <a href="/auth/aaud/redirect" className="login-sso-button"><ShieldCheck aria-hidden="true" />Iniciar sesión con AAUD OAUTH</a>}
         <span className="login-watermark" aria-hidden="true">by: Informatica AAUD</span>
     </section></div>;
 }

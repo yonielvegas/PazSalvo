@@ -52,7 +52,7 @@ export function SsoIdentitySection({ enabled, onEnabledChange, onSelect, selecti
             const term = query.trim();
             const response = await fetch(`/admin/sso-directory?${new URLSearchParams({ query: term, page: String(page) })}`,
                 { credentials: 'same-origin', headers: { Accept: 'application/json' }, signal: abort.signal });
-            if (!response.ok) throw new Error('No se pudo consultar AAUD AUTH. Intente nuevamente o desactive la vinculación para continuar localmente.');
+            if (!response.ok) throw new Error('No se pudo consultar AAUD OAUTH. Intente nuevamente o desactive la vinculación para continuar localmente.');
             const data = await response.json() as Results;
             if (current === sequence.current) { setResults(data); setSearchedQuery(term); }
         } catch (e) { if (!abort.signal.aborted && current === sequence.current) setFailure((e as Error).message); }
@@ -61,8 +61,8 @@ export function SsoIdentitySection({ enabled, onEnabledChange, onSelect, selecti
 
     const saved = identity?.verified_profile;
     const showSearch = enabled && !selection && (!identity || !saved);
-    return <section className="sso-section sso-compact" aria-label="AAUD AUTH">
-        <div className="sso-switch-row"><strong id={`${mode}-sso-label`}>Vincular con AAUD AUTH</strong>
+    return <section className="sso-section sso-compact" aria-label="AAUD OAUTH">
+        <div className="sso-switch-row"><strong id={`${mode}-sso-label`}>Vincular con AAUD OAUTH</strong>
             <button type="button" role="switch" aria-labelledby={`${mode}-sso-label`} aria-checked={enabled}
                 className={`sso-switch ${enabled ? 'is-on' : 'is-off'}`} disabled={disabled}
                 onClick={() => { reset(); onEnabledChange(!enabled); }}><span aria-hidden="true" /></button>
@@ -107,7 +107,7 @@ export function SsoIdentitySection({ enabled, onEnabledChange, onSelect, selecti
             {selection && mode === 'edit' && <p className="sso-help">Al guardar, los datos locales disponibles se sustituirán por los institucionales seleccionados.</p>}
             {identity && !saved && !selection && <p className="sso-help">Vinculación anterior sin perfil verificado. Seleccione nuevamente esta identidad para verificar sus datos.</p>}
         </>}
-        {!enabled && identity && <p className="sso-help">Al guardar se desvinculará AAUD AUTH. El usuario, username, contraseña, rol, agencia e historial se conservarán.</p>}
+        {!enabled && identity && <p className="sso-help">Al guardar se desvinculará AAUD OAUTH. El usuario, username, contraseña, rol, agencia e historial se conservarán.</p>}
         {identity && <p className="sso-date">Vinculado al SSO desde: {panamaDate(identity.linked_at)}</p>}
     </section>;
 }

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Integrations\AaudAuth\Exceptions\InvalidRoleCatalogException;
-use App\Integrations\AaudAuth\Roles\RoleCatalogBuilder;
+use App\Integrations\AaudOauth\Exceptions\InvalidRoleCatalogException;
+use App\Integrations\AaudOauth\Roles\RoleCatalogBuilder;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
 
@@ -11,7 +11,7 @@ class PreviewSsoRoleCatalog extends Command
 {
     protected $signature = 'sso:roles:preview';
 
-    protected $description = 'Muestra el catálogo web para AAUD AUTH, sin tokens ni sincronización';
+    protected $description = 'Muestra el catálogo web para AAUD OAUTH, sin tokens ni sincronización';
 
     public function handle(RoleCatalogBuilder $builder): int
     {
