@@ -6,10 +6,10 @@ use App\Models\Agency;
 use App\Models\Client;
 use App\Models\GeneralAdminSignature;
 use App\Models\PazSalvo;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 
 class PazSalvoFactory extends Factory
 {

@@ -1,0 +1,2 @@
+import { chromium } from '../../node_modules/playwright/index.mjs';
+const b=await chromium.launch();try{const p=await b.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));await p.goto('http://localhost:8000/login');await p.waitForTimeout(1200);console.log(JSON.stringify({title:await p.title(),buttonCount:await p.getByRole('link',{name:'Iniciar sesión con AAUD OAUTH'}).count(),scripts:await p.locator('script[src]').evaluateAll(e=>e.map(x=>x.src)),errors}));}finally{await b.close();}

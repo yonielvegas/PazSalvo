@@ -1,0 +1,254 @@
+{
+  "tool": "phpunit",
+  "result": "failed",
+  "tests": 802,
+  "passed": 762,
+  "assertions": 6225,
+  "duration_ms": 223069,
+  "failed": 25,
+  "failures": [
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_bad_callbacks_fail_before_token_exchange_and_consume_the_flow with data set #3",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 146,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_bad_callbacks_fail_before_token_exchange_and_consume_the_flow with data set #4",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 146,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_bad_callbacks_fail_before_token_exchange_and_consume_the_flow with data set #5",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 146,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_expired_transaction_and_replayed_consumed_callback_never_exchange_a_code",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 155,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_concurrent_replay_guard_rejects_a_previously_consumed_state",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 165,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_invalid_id_tokens_never_create_a_local_session with data set #0",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 180,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_invalid_id_tokens_never_create_a_local_session with data set #1",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 180,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_invalid_id_tokens_never_create_a_local_session with data set #2",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 180,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_invalid_id_tokens_never_create_a_local_session with data set #3",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 180,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_logout_returns_to_portal_without_central_logout",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 190,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_oidc_logout_supports_inertia_and_normal_sso_reentry",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 202,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_linked_account_alternates_between_local_and_oidc_sessions",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 223,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_unlink_invalidates_only_the_local_sso_session_on_the_next_request",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 246,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_disabled_sso_does_not_make_http_calls_or_disable_local_login",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 256,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_external_discovery_endpoints_are_rejected_before_sending_any_credentials",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 265,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_malformed_token_response_is_sanitized_and_flow_cannot_be_retried",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 273,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_unsafe_configuration_never_starts_oauth with data set #0",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 292,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_unsafe_configuration_never_starts_oauth with data set #1",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 292,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_unsafe_configuration_never_starts_oauth with data set #2",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 292,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_unsafe_configuration_never_starts_oauth with data set #3",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 292,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_unsafe_configuration_never_starts_oauth with data set #4",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 292,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_provider_timeout_consumes_flow_and_never_logs_provider_details",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 300,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_sso_never_unlocks_local_password_attempts_even_after_logout",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 312,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\Oidc\\OidcLoginTest::test_sso_only_passwordless_account_logs_in_and_admin_reset_preserves_both_methods",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Oidc/OidcLoginTest.php",
+      "line": 323,
+      "message": "Expected response status code [201, 301, 302, 303, 307, 308] but received 429.\nFailed asserting that false is true."
+    },
+    {
+      "test": "Tests\\Feature\\PublicPazSalvoTest::test_rate_limits_are_preserved",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/PublicPazSalvoTest.php",
+      "line": 111,
+      "message": "Session is missing expected key [errors].\nFailed asserting that false is true."
+    }
+  ],
+  "errors": 15,
+  "error_details": [
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessOutboxTest::test_changes_during_pending_are_durable_and_versioned_after_confirmation",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessOutboxTest.php",
+      "line": 113,
+      "message": "La modificaci\u00f3n requiere un administrador identificado."
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessOutboxTest::test_revocation_survives_deleted_user_and_identity",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessOutboxTest.php",
+      "line": 129,
+      "message": "La modificaci\u00f3n requiere un administrador identificado."
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessOutboxTest::test_deactivation_and_reactivation_reserve_distinct_versions",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessOutboxTest.php",
+      "line": 276,
+      "message": "La modificaci\u00f3n requiere un administrador identificado."
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessOutboxTest::test_revocation_intent_survives_reactivation_while_an_active_put_is_unresolved",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessOutboxTest.php",
+      "line": 296,
+      "message": "La modificaci\u00f3n requiere un administrador identificado."
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessOutboxTest::test_verified_existing_remote_version_is_not_assumed_zero",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessOutboxTest.php",
+      "line": 312,
+      "message": "La modificaci\u00f3n requiere un administrador identificado."
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessSnapshotBuilderTest::test_real_user_snapshot_reads_current_links_and_roles_without_writing_anything",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessSnapshotBuilderTest.php",
+      "line": 39,
+      "message": "Builder must not obtain a token"
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessSnapshotBuilderTest::test_local_login_block_does_not_revoke_but_administrative_deactivation_does",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessSnapshotBuilderTest.php",
+      "line": 64,
+      "message": "Builder must not obtain a token"
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\AccessSnapshotBuilderTest::test_deleted_link_can_be_revoked_with_old_snapshot_and_never_uses_new_link",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/AccessSnapshotBuilderTest.php",
+      "line": 76,
+      "message": "Builder must not obtain a token"
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\CatalogOutboxTest::test_prepares_complete_snapshot_with_custom_inactive_roles_and_no_catalog_writes",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/CatalogOutboxTest.php",
+      "line": 118,
+      "message": "Existe una operaci\u00f3n de cat\u00e1logo sin resolver."
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\CatalogOutboxTest::test_confirmation_distinguishes_current_local_state_from_an_acknowledged_operation",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/CatalogOutboxTest.php",
+      "line": 223,
+      "message": "Existe una operaci\u00f3n de cat\u00e1logo sin resolver."
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\RoleCatalogBuilderTest::test_builds_all_five_real_roles_with_exact_payload_fields",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/RoleCatalogBuilderTest.php",
+      "line": 29,
+      "message": "Catalog must not resolve the token provider"
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\RoleCatalogBuilderTest::test_includes_custom_inactive_roles_excludes_other_guards_and_keeps_stable_code",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/RoleCatalogBuilderTest.php",
+      "line": 42,
+      "message": "Catalog must not resolve the token provider"
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\RoleCatalogBuilderTest::test_builder_uses_one_select_without_relations_or_writes",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/RoleCatalogBuilderTest.php",
+      "line": 55,
+      "message": "Catalog must not resolve the token provider"
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\RoleCatalogBuilderTest::test_preview_prints_only_catalog_without_tokens_versions_or_writes",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/RoleCatalogBuilderTest.php",
+      "line": 75,
+      "message": "Catalog must not resolve the token provider"
+    },
+    {
+      "test": "Tests\\Feature\\Integrations\\AaudOauth\\RoleCatalogBuilderTest::test_invalid_database_name_fails_without_repairing_or_exposing_data",
+      "file": "/var/www/PazSalvos/PazSalvo/tests/Feature/Integrations/AaudOauth/RoleCatalogBuilderTest.php",
+      "line": 103,
+      "message": "Catalog must not resolve the token provider"
+    }
+  ]
+}

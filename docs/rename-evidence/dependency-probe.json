@@ -1,0 +1,10 @@
+{
+    "http_foundation": "v7.4.14",
+    "mime": "v7.4.13",
+    "header_parse_ms": {
+        "4": 0.867,
+        "12": 0.083,
+        "17": 1.87
+    },
+    "mime_parameter_accepts_crlf": true
+}

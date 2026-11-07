@@ -3,12 +3,14 @@
 namespace App\Console\Commands;
 
 use App\Models\Agency;
+use App\Models\Role;
 use App\Models\User;
+use App\Services\AdministrativeTransaction;
+use App\Services\AuditLogger;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use Spatie\Permission\Models\Role;
 
 class CreatePazSalvoUser extends Command
 {
@@ -53,19 +55,25 @@ class CreatePazSalvoUser extends Command
             return self::FAILURE;
         }
 
-        $agency = Agency::firstOrCreate(['name' => $agencyName], ['code' => $agencyCode ?: null, 'is_active' => true]);
-        $user = User::create([
-            'agency_id' => $agency->id,
-            'name' => $name,
-            'email' => mb_strtolower($email),
-            'password' => Hash::make($temporaryPassword),
-            'password_changed_at' => null,
-            'must_change_password' => true,
-            'password_reset_at' => now(),
-            'login_attempts' => 0,
-            'is_login_blocked' => false,
-        ]);
-        $user->assignRole($role);
+        $user = AdministrativeTransaction::run(function () use ($agencyName, $agencyCode, $name, $email, $temporaryPassword, $role) {
+            $agency = Agency::firstOrCreate(['name' => $agencyName], ['code' => $agencyCode ?: null, 'is_active' => true]);
+            $user = User::create([
+                'agency_id' => $agency->id,
+                'name' => $name,
+                'email' => mb_strtolower($email),
+                'password' => Hash::make($temporaryPassword),
+                'password_changed_at' => null,
+                'must_change_password' => true,
+                'password_reset_at' => now(),
+                'login_attempts' => 0,
+                'is_login_blocked' => false,
+            ]);
+            $user->assignRole($role);
+            app(AuditLogger::class)->record('user.created', ['source' => 'console'], $user, result: 'success');
+
+            return $user;
+        });
+        $agency = $user->agency;
         $this->info("Usuario {$user->email} creado con rol {$role} en {$agency->name}. Debe cambiar su contraseña al iniciar sesión.");
 
         return self::SUCCESS;

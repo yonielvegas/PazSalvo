@@ -1,0 +1,3 @@
+<?php
+require __DIR__.'/../../vendor/autoload.php';$app=require __DIR__.'/../../bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$c=config('database.connections.pgsql');$c['database']='paz_salvo_aaud_testing';$c['url']=null;config(['database.connections.rename_test_probe'=>$c]);try{$db=$app['db']->connection('rename_test_probe');echo json_encode($db->selectOne('select current_database() as db,current_user as role')).PHP_EOL;echo json_encode($db->select('select migration from migrations order by id')).PHP_EOL;}catch(Throwable $e){echo get_class($e).': test credentials unavailable'.PHP_EOL;exit(1);}

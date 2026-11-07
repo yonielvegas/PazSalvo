@@ -6,6 +6,7 @@ use App\Models\Agency;
 use App\Models\Client;
 use App\Models\GeneralAdminSignature;
 use App\Models\PazSalvo;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -13,7 +14,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class HistoryInvoiceSearchTest extends TestCase
@@ -375,7 +375,9 @@ class HistoryInvoiceSearchTest extends TestCase
         $viewer = $this->historyUser();
         Role::firstOrCreate(['name' => 'supervisor', 'guard_name' => 'web']);
         $operator = User::factory()->create(['name' => 'Zeta Operador', 'is_active' => false]);
-        $operator->assignRole(['operador', 'supervisor']);
+        // An author has one role; uniqueness is tested using multiple certificates instead.
+        $operator->assignRole('operador');
+        $this->document(['generated_by' => $operator->id]);
         $supervisor = User::factory()->create(['name' => 'Alfa Supervisor']);
         $supervisor->assignRole('supervisor');
         $other = User::factory()->create(['name' => 'Beta Otro']);

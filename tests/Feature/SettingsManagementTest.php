@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Agency;
+use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\AgencyCatalog;
 use Database\Seeders\MasterDataSeeder;
@@ -11,7 +12,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SettingsManagementTest extends TestCase
@@ -50,7 +50,8 @@ class SettingsManagementTest extends TestCase
 
         $existingPassword = Hash::make('existing-test-password');
         DB::table('users')->where('id', $admin->id)->update(['password' => $existingPassword, 'session_version' => 9]);
-        Role::findByName('admin')->forceFill(['is_active' => false])->save();
+        // Simulate legacy database state; normal model operations now reject this.
+        DB::table('roles')->where('name', 'admin')->update(['is_active' => false]);
         $seeder->run();
         $this->assertSame(5, Agency::count());
         $this->assertSame(1, User::where('email', 'itadmin@aaud.gob.pa')->count());

@@ -3,6 +3,7 @@
 namespace App\Actions\Fortify;
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -21,12 +22,19 @@ class ResetUserPassword implements ResetsUserPasswords
      */
     public function reset(User $user, array $input): void
     {
+        $user->fresh()->assertLocalPasswordChangesAllowed();
+
         Validator::make($input, [
             'password' => $this->passwordRules(),
         ])->validate();
 
-        $user->forceFill([
-            'password' => Hash::make($input['password']),
-        ])->save();
+        DB::transaction(function () use ($user, $input) {
+            $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $locked->assertLocalPasswordChangesAllowed();
+            $locked->forceFill([
+                'password' => Hash::make($input['password']),
+            ])->save();
+        });
+        $user->refresh();
     }
 }

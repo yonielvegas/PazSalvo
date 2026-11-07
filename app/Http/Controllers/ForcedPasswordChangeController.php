@@ -17,6 +17,7 @@ class ForcedPasswordChangeController extends Controller
 {
     public function edit(Request $request): Response|RedirectResponse
     {
+        $request->user()?->fresh()->assertLocalPasswordChangesAllowed();
         if (! $request->user()?->must_change_password) {
             return redirect()->to($this->homePath($request->user()));
         }
@@ -28,6 +29,7 @@ class ForcedPasswordChangeController extends Controller
     {
         $user = $request->user();
         abort_unless($user, 403);
+        $user->fresh()->assertLocalPasswordChangesAllowed();
 
         if (! $user->must_change_password) {
             return redirect()->to($this->homePath($user));
@@ -59,6 +61,7 @@ class ForcedPasswordChangeController extends Controller
 
         $newVersion = DB::transaction(function () use ($user, $validated) {
             $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $locked->assertLocalPasswordChangesAllowed();
             $newVersion = ((int) $locked->session_version) + 1;
 
             $locked->forceFill([

@@ -62,6 +62,7 @@ test('roles agrupa y conserva permisos específicos', async ({ page }) => {
     await page.getByRole('dialog').getByRole('button', { name: 'Guardar rol' }).click();
     const row = page.locator('.settings-role-row').filter({ hasText: roleName });
     await expect(row).toContainText('2 permisos');
+    await expect(row.locator('small')).toHaveText(roleName);
     await row.getByRole('button', { name: 'Permisos' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.locator('label').filter({ hasText: 'settings.view' }).locator('input')).toBeChecked();
@@ -76,9 +77,11 @@ test('roles agrupa y conserva permisos específicos', async ({ page }) => {
     await expect(dialog.locator('input[type=checkbox]:checked')).toHaveCount(2);
     await dialog.getByRole('button', { name: 'Cancelar' }).click();
     await row.getByRole('button', { name: 'Editar' }).click();
+    await expect(page.locator('#role-code')).toHaveCount(0);
     await page.locator('#role-name').fill(`${roleName}_edit`);
     await page.getByRole('dialog').getByRole('button', { name: 'Guardar rol' }).click();
     await expect(page.locator('.settings-role-row').filter({ hasText: `${roleName}_edit` })).toBeVisible();
+    await expect(page.locator('.settings-role-row').filter({ hasText: `${roleName}_edit` }).locator('small')).toHaveText(roleName);
 });
 
 test('usuario sin permisos no accede a configuración ni a acciones', async ({ page }) => {

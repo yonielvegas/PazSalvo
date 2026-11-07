@@ -21,8 +21,15 @@ class EnsureSingleActiveSession
             return $this->logout($request, 'Su usuario fue desactivado. Contacte a un administrador.', 'session.inactive_user');
         }
 
-        if (! $user->roles()->where('is_active', true)->exists()) {
+        if (! $user->hasOperationalRole()) {
             return $this->logout($request, $user::NO_ROLE_LOGIN_MESSAGE, 'session.no_role');
+        }
+
+        if ($request->session()->get('auth_method') === 'oidc'
+            && ! $user->ssoIdentity()->whereKey($request->session()->get('auth_sso_identity_id'))
+                ->where('issuer', $request->session()->get('auth_sso_issuer'))
+                ->where('subject', $request->session()->get('auth_sso_subject'))->exists()) {
+            return $this->logout($request, 'Su acceso institucional cambió. Inicie sesión nuevamente.', 'session.sso_unlinked');
         }
 
         $sessionVersion = $request->session()->get('auth_session_version');

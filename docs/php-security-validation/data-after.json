@@ -1,0 +1,68 @@
+{
+    "users": {
+        "count": 18,
+        "fingerprint": "3903ce64dfc5b45ba72d4253460c9338"
+    },
+    "roles": {
+        "count": 5,
+        "fingerprint": "5006a14828a6ed138e71ba46cb03831e"
+    },
+    "permissions": {
+        "count": 21,
+        "fingerprint": "0dbc37f3729acb77a3a992420826576a"
+    },
+    "model_has_roles": {
+        "count": 18,
+        "fingerprint": "698c9e23dcfe579039dd005f135d7518"
+    },
+    "role_has_permissions": {
+        "count": 37,
+        "fingerprint": "442f04d74d4c3410fb13a0ec48fb652e"
+    },
+    "user_sso_identities": {
+        "count": 6,
+        "fingerprint": "a5cc4fcc8d037aa909e22c75e366f75a"
+    },
+    "aaud_auth_catalog_states": {
+        "count": 1,
+        "fingerprint": "5d955c84c3dc9a0d8b4088f506e0f6d0"
+    },
+    "aaud_auth_catalog_operations": {
+        "count": 1,
+        "fingerprint": "a84ed90f13fddf366fd24837948e0f8b"
+    },
+    "aaud_auth_access_states": {
+        "count": 6,
+        "fingerprint": "05d0f875d8e56862dae2e2dcb983f446"
+    },
+    "aaud_auth_access_targets": {
+        "count": 6,
+        "fingerprint": "77c998de3fe478794849f141de6dcb99"
+    },
+    "aaud_auth_access_operations": {
+        "count": 6,
+        "fingerprint": "c264e1a25223bfa9cdde767aa1fe1e2e"
+    },
+    "migrations": {
+        "count": 38,
+        "fingerprint": "0f9efa80c2c3eec8ba5a78151ab780b5"
+    },
+    "verified_users": [
+        {
+            "id": 15,
+            "name": "Ricardo Vargas",
+            "is_active": true,
+            "role": "operador",
+            "issuer": "http:\/\/localhost:8080\/realms\/aaud",
+            "subject": "1a454d3f-5500-47a7-bf9c-bff9a1292f4b"
+        },
+        {
+            "id": 16,
+            "name": "Ana Duarte",
+            "is_active": true,
+            "role": "consulta",
+            "issuer": "http:\/\/localhost:8080\/realms\/aaud",
+            "subject": "8278af94-054b-47f0-8c31-0af131cf89fa"
+        }
+    ]
+}

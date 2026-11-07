@@ -15,7 +15,11 @@ class AddSecurityHeaders
 
         $headers->set('X-Content-Type-Options', 'nosniff');
         $headers->set('X-Frame-Options', 'DENY');
-        $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $headers->set('Referrer-Policy', $request->is('auth/aaud/*') ? 'no-referrer' : 'strict-origin-when-cross-origin');
+        if ($request->is('auth/aaud/*')) {
+            $headers->set('Cache-Control', 'no-store, private');
+            $headers->set('Pragma', 'no-cache');
+        }
         $headers->set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
         if (! $request->is('verificar', 'verificar/*', 'validar-paz-salvo')) {
             $headers->set('Content-Security-Policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'");

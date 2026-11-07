@@ -1,0 +1,38 @@
+php8.3	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-calendar		not-installed
+php8.3-cgi		not-installed
+php8.3-cli	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-common	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-ctype		not-installed
+php8.3-curl	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-dom		not-installed
+php8.3-exif		not-installed
+php8.3-ffi		not-installed
+php8.3-fileinfo		not-installed
+php8.3-fpm	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-ftp		not-installed
+php8.3-gd	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-gettext		not-installed
+php8.3-iconv		not-installed
+php8.3-intl	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-json		not-installed
+php8.3-mbstring	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-opcache	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-pdo		not-installed
+php8.3-pdo-pgsql		not-installed
+php8.3-pgsql	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-phar		not-installed
+php8.3-posix		not-installed
+php8.3-readline	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-shmop		not-installed
+php8.3-simplexml		not-installed
+php8.3-sockets		not-installed
+php8.3-sysvmsg		not-installed
+php8.3-sysvsem		not-installed
+php8.3-sysvshm		not-installed
+php8.3-tokenizer		not-installed
+php8.3-xml	8.3.6-0ubuntu0.24.04.13	installed
+php8.3-xmlreader		not-installed
+php8.3-xmlwriter		not-installed
+php8.3-xsl		not-installed
+php8.3-zip	8.3.6-0ubuntu0.24.04.13	installed

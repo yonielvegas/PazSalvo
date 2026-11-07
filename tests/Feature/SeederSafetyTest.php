@@ -3,12 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Agency;
+use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\DevelopmentBootstrapSeeder;
 use Database\Seeders\MasterDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SeederSafetyTest extends TestCase
