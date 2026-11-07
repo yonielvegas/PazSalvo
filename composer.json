@@ -79,6 +79,16 @@
         }
     },
     "config": {
+        "audit": {
+            "ignore": {
+                "PKSA-24ph-xkrh-y79j": "Excepcion temporal autorizada por el propietario: conservar symfony/http-foundation pese al bypass de reglas por peticiones HEAD (CVE-2026-118514), pendiente de actualizar la dependencia.",
+                "PKSA-pr6q-2w5s-kzzf": "Excepcion temporal autorizada por el propietario: conservar symfony/http-foundation pese al bypass de reglas de ruta al anexar la ruta al nombre del script, pendiente de actualizar la dependencia.",
+                "PKSA-nxjs-s6hn-vb6m": "Excepcion temporal autorizada por el propietario: conservar symfony/http-foundation pese a la confianza indebida en proxies con direcciones de transicion IPv6 mediante private_ranges, pendiente de actualizar la dependencia.",
+                "PKSA-b2gg-vk1g-6d5q": "Excepcion temporal autorizada por el propietario: conservar symfony/http-foundation pese a la generacion de URLs con un host elegido por el cliente, pendiente de actualizar la dependencia.",
+                "PKSA-3gxv-7xhq-mgmz": "Excepcion temporal autorizada por el propietario: conservar symfony/http-kernel pese a la influencia de cabeceras reenviadas no confiables en URLs mediante fragmentos inline, pendiente de actualizar la dependencia.",
+                "PKSA-y8c5-1b7f-r1gj": "Excepcion temporal autorizada por el propietario: conservar symfony/routing pese al bypass de controles de ruta mediante placeholders de host (CVE-2026-118516), pendiente de actualizar la dependencia."
+            }
+        },
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
